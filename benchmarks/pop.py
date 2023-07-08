@@ -194,7 +194,7 @@ if __name__ == "__main__":
                 "--num-subproblems",
                 {
                     "type": int,
-                    "choices": [1, 2, 4, 8, 16, 32, 64],
+                    "choices": [1, 2, 4, 8, 16, 32, 64, 128],
                     "nargs": "+",
                     "default": [16, 64],
                     "help": "Number of subproblems to use",

@@ -14,6 +14,7 @@ sys.path.append("..")
 from lib.constants import NUM_CORES
 from lib.algorithms import NcfEpi
 from lib.problem import Problem
+from lib.runtime_utils import parallelized_rt
 
 TOP_DIR = "ncflow-logs"
 OUTPUT_CSV_TEMPLATE = "ncflow-{}-{}.csv"
@@ -45,6 +46,12 @@ HEADERS = [
     "recon_runtime",
     "r3_runtime",
     "kirchoffs_runtime",
+    "r1_synctime",
+    "r2_synctime",
+    "recon_synctime",
+    "r3_synctime",
+    "kirchoffs_synctime",
+    "itertime",
 ]
 PLACEHOLDER = ",".join("{}" for _ in HEADERS)
 
@@ -149,6 +156,18 @@ def benchmark(problems, output_csv):
                     for iter in range(ncflow.num_iters):
                         nc = ncflow._ncflows[iter]
 
+                        r1_synctime = nc._synctime_dict["r1"]
+                        r2_synctime = parallelized_rt(
+                            [t for _, t in nc._synctime_dict["r2"].items()], 
+                            NUM_CORES)
+                        recon_synctime = parallelized_rt(
+                            [t for _, t in nc._synctime_dict["reconciliation"].items()], 
+                            NUM_CORES)
+                        r3_synctime = nc._synctime_dict["r3"]
+                        kirchoffs_synctime = parallelized_rt(
+                            [t for _, t in nc._synctime_dict["kirchoffs"].items()], 
+                            NUM_CORES)
+
                         (
                             r1_runtime,
                             r2_runtime,
@@ -190,6 +209,12 @@ def benchmark(problems, output_csv):
                             recon_runtime,
                             r3_runtime,
                             kirchoffs_runtime,
+                            r1_synctime,
+                            r2_synctime,
+                            recon_synctime,
+                            r3_synctime,
+                            kirchoffs_synctime,
+                            ncflow.iter_time[iter],
                         )
                         print_(result_line, file=results)
 

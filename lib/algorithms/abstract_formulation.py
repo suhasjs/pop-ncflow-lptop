@@ -8,7 +8,7 @@ import sys
 EPS = 1e-5
 
 
-OBJ_STRS = ["total_flow", "mcf", "min_max_link_util", "compute_demand_scale_factor"]
+OBJ_STRS = ["total_flow", "min_max_link_util"]
 
 
 @unique

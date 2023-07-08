@@ -10,40 +10,25 @@ sys.path.append("..")
 from lib.algorithms import PathFormulation, TEAVAR
 from lib.algorithms.abstract_formulation import OBJ_STRS
 from lib.partitioning import FMPartitioning, SpectralClustering
+from lib.config import TOPOLOGIES_DIR, TM_DIR
 
 PROBLEM_NAMES = [
-    "GtsCe.graphml",
-    "UsCarrier.graphml",
-    "Cogentco.graphml",
-    "Colt.graphml",
-    "TataNld.graphml",
-    "Deltacom.graphml",
-    "DialtelecomCz.graphml",
-    "Kdl.graphml",
+    'B4.json',
+    'UsCarrier.json',
+    'Kdl.json',
+    'ASN2k.json',
 ]
 TM_MODELS = [
-    "uniform",
-    "gravity",
-    "bimodal",
-    "poisson-high-intra",
-    "poisson-high-inter",
+    "real",
 ]
-SCALE_FACTORS = [1.0, 2.0, 4.0, 8.0, 16.0, 32.0, 64.0, 128.0]
+SCALE_FACTORS = [1.0]
 
-PATH_FORM_HYPERPARAMS = (4, True, "inv-cap")
+PATH_FORM_HYPERPARAMS = (4, True, "min-hop")
 NCFLOW_HYPERPARAMS = {
-    "GtsCe.graphml": (4, True, "inv-cap", FMPartitioning, 3),
-    "UsCarrier.graphml": (4, True, "inv-cap", FMPartitioning, 3),
-    "Cogentco.graphml": (4, True, "inv-cap", FMPartitioning, 3),
-    "Colt.graphml": (4, True, "inv-cap", FMPartitioning, 3),
-    "TataNld.graphml": (4, True, "inv-cap", FMPartitioning, 3),
-    "Deltacom.graphml": (4, True, "inv-cap", FMPartitioning, 3),
-    "DialtelecomCz.graphml": (4, True, "inv-cap", FMPartitioning, 3),
-    "Uninett2010.graphml": (4, True, "inv-cap", FMPartitioning, 3),
-    "Interoute.graphml": (4, True, "inv-cap", SpectralClustering, 2),
-    "Ion.graphml": (4, True, "inv-cap", FMPartitioning, 3),
-    "Kdl.graphml": (4, True, "inv-cap", FMPartitioning, 3),
-    "erdos-renyi-1260231677.json": (4, True, "inv-cap", FMPartitioning, 3),
+    'B4.json': (4, True, 'min-hop', FMPartitioning, 3),
+    'UsCarrier.json': (4, True, 'min-hop', FMPartitioning, 3),
+    'Kdl.json': (4, True, 'min-hop', FMPartitioning, 3),
+    'ASN2k.json': (4, True, 'min-hop', FMPartitioning, 3),
 }
 
 PROBLEM_NAMES_AND_TM_MODELS = [
@@ -57,12 +42,12 @@ GROUPED_BY_HOLDOUT_PROBLEMS = defaultdict(list)
 
 for problem_name in PROBLEM_NAMES:
     if problem_name.endswith(".graphml"):
-        topo_fname = os.path.join("..", "topologies", "topology-zoo", problem_name)
+        topo_fname = os.path.join(TOPOLOGIES_DIR, "topology-zoo", problem_name)
     else:
-        topo_fname = os.path.join("..", "topologies", problem_name)
+        topo_fname = os.path.join(TOPOLOGIES_DIR, problem_name)
     for model in TM_MODELS:
         for tm_fname in iglob(
-            "../traffic-matrices/{}/{}*_traffic-matrix.pkl".format(model, problem_name)
+            "{}/{}/{}*_traffic-matrix.pkl".format(TM_DIR, model, problem_name)
         ):
             vals = os.path.basename(tm_fname)[:-4].split("_")
             _, traffic_seed, scale_factor = vals[1], int(vals[2]), float(vals[3])
@@ -71,8 +56,8 @@ for problem_name in PROBLEM_NAMES:
             )
             PROBLEMS.append((problem_name, topo_fname, tm_fname))
         for tm_fname in iglob(
-            "../traffic-matrices/holdout/{}/{}*_traffic-matrix.pkl".format(
-                model, problem_name
+            "{}/holdout/{}/{}*_traffic-matrix.pkl".format(
+                TM_DIR, model, problem_name
             )
         ):
             vals = os.path.basename(tm_fname)[:-4].split("_")
@@ -84,11 +69,13 @@ for problem_name in PROBLEM_NAMES:
 
 GROUPED_BY_PROBLEMS = dict(GROUPED_BY_PROBLEMS)
 for key, vals in GROUPED_BY_PROBLEMS.items():
-    GROUPED_BY_PROBLEMS[key] = sorted(vals)
+    GROUPED_BY_PROBLEMS[key] = sorted(vals, 
+        key=lambda x: int(x[-1].split('_')[-3]))
 
 GROUPED_BY_HOLDOUT_PROBLEMS = dict(GROUPED_BY_HOLDOUT_PROBLEMS)
 for key, vals in GROUPED_BY_HOLDOUT_PROBLEMS.items():
-    GROUPED_BY_HOLDOUT_PROBLEMS[key] = sorted(vals)
+    GROUPED_BY_HOLDOUT_PROBLEMS[key] = sorted(vals, 
+        key=lambda x: int(x[-1].split('_')[-3]))
 
 
 # This should be called when `many_problems` is False
@@ -106,15 +93,14 @@ def get_problems(args):
         (problem_name, tm_model, scale_factor),
         topo_and_tm_fnames,
     ) in GROUPED_BY_PROBLEMS.items():
-        for slice in args.slices:
+        for topo_fname, tm_fname in topo_and_tm_fnames:
             if (
                 ("all" in args.topos or problem_name in args.topos)
                 and ("all" in args.tm_models or tm_model in args.tm_models)
                 and ("all" in args.scale_factors or scale_factor in args.scale_factors)
             ):
-                topo_fname, tm_fname = topo_and_tm_fnames[slice]
                 problems.append((problem_name, topo_fname, tm_fname))
-    return problems
+    return problems[args.slice_start:args.slice_stop]
 
 
 class AlgoClsAction(argparse.Action):
@@ -131,12 +117,22 @@ class AlgoClsAction(argparse.Action):
         setattr(namespace, self.dest, value)
 
 
+def check_gurobi_license():
+    if not os.system('gurobi_cl --license'):
+        return True
+    else:
+        return False
+
+
 def get_args_and_problems(
     formatted_fname_template,
     additional_args=[],
     *,
     many_problems=True,
 ):
+    if not check_gurobi_license():
+        raise Exception("Gurobi license not found")
+
     parser = argparse.ArgumentParser()
     parser.add_argument("--dry-run", dest="dry_run", action="store_true", default=False)
     parser.add_argument(
@@ -168,7 +164,10 @@ def get_args_and_problems(
             default="all",
         )
         parser.add_argument(
-            "--slices", type=int, choices=range(5), nargs="+", required=True
+            "--slice-start", type=int, default = 28
+        )
+        parser.add_argument(
+            "--slice-stop", type=int, default = 36 
         )
     else:
         parser.add_argument("--tm-model", type=str, choices=TM_MODELS, required=True)
@@ -176,14 +175,13 @@ def get_args_and_problems(
         parser.add_argument(
             "--scale-factor", type=float, choices=SCALE_FACTORS, required=True
         )
-        parser.add_argument("--slice", type=int, choices=range(5), required=True)
-
+        parser.add_argument("--slice", type=int, required=True)
     for add_arg in additional_args:
         name_or_flags, kwargs = add_arg[0], add_arg[1]
         parser.add_argument(name_or_flags, **kwargs)
     args = parser.parse_args()
     if many_problems:
-        slice_str = "slice_" + "_".join(str(i) for i in args.slices)
+        slice_str = "all" # "slice_" + "_".join(str(i) for i in args.slices)
         formatted_fname_substr = formatted_fname_template.format(args.obj, slice_str)
         return args, formatted_fname_substr, get_problems(args)
     else:
@@ -191,7 +189,6 @@ def get_args_and_problems(
             formatted_fname_template, args, additional_args
         )
         return args, formatted_fname_substr, get_problem(args)
-
 
 # Should only be used when `many_problems` is False
 def format_args_for_filename(template, args, additional_args):

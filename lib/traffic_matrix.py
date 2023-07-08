@@ -112,6 +112,7 @@ class TrafficMatrix(object):
                 scale_factor=scale_factor,
             )
         elif model == "real":
+            vals = os.path.basename(fname)[:-4].split("_")
             date, time = vals[0], vals[1]
             return RealTrafficMatrix(
                 problem=None,

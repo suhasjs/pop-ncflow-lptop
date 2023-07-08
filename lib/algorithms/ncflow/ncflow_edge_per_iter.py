@@ -16,6 +16,7 @@ from sys import maxsize
 
 import networkx as nx
 import numpy as np
+import time
 
 import hashlib
 import os
@@ -70,6 +71,7 @@ class NCFlowEdgePerIter(AbstractFormulation):
         self.dist_metric = dist_metric
         self._args = args
         self.max_num_iters = self.MAX_NUM_ITERS
+        self.iter_time = []
 
     def divide_problem_into_partitions(self, problem, partition_vector):
         G_meta_no_edges = nx.DiGraph()
@@ -489,7 +491,7 @@ class NCFlowEdgePerIter(AbstractFormulation):
                 else:
                     return sum(1.0 / cap for cap in caps)
             elif dist_metric == "min-hop":
-                return len(path_to_edge_list(path))
+                return len(list(path_to_edge_list(path)))
             else:
                 raise Exception("invalid dist_metric: {}".format(dist_metric))
 
@@ -613,9 +615,12 @@ class NCFlowEdgePerIter(AbstractFormulation):
         for iter in range(self.max_num_iters):
             print("iteration {}\n".format(iter))
 
+            self.iter_time.append(0)
             if iter > 0:
+                start_time = time.time()
                 self.update_data_structures_for_residual_problem(iter, curr_prob)
-
+                self.iter_time[-1] += time.time()-start_time
+            
             # Retrieve which R1 path we will use for each meta-commodity for this iteration
             r1_paths_dict_current_iter = self.r1_path_assignments[iter]
             # Then run NCFlowSingleIter with those paths and the R2 paths we already computed
@@ -639,8 +644,11 @@ class NCFlowEdgePerIter(AbstractFormulation):
             )
             self._ncflows.append(nc)
             # Compute residual problem and iterate
+            start_time = time.time()
             self._print("Computing residual problem after iteration {}".format(iter))
             curr_prob = compute_residual_problem(curr_prob.copy(), nc.sol_dict)
+            # time of calculating residual problem
+            self.iter_time[-1] += time.time()-start_time
             self._problems.append(curr_prob)
             if nc.out.name != "stdout" and nc.out.name != "<stdout>":
                 nc.out.close()

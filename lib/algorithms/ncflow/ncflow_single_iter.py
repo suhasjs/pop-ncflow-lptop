@@ -16,6 +16,7 @@ from itertools import product
 
 import networkx as nx
 import numpy as np
+import time
 
 import re
 import sys
@@ -378,6 +379,7 @@ class NCFlowSingleIter(NCFlowAbstract):
                 len(multi_commodity_list),
             )
 
+        start_time = time.time() 
         for meta_commod_key, flow_seq in self.r1_sol_dict.items():
             if len(flow_seq) == 0:
                 continue
@@ -458,6 +460,8 @@ class NCFlowSingleIter(NCFlowAbstract):
                         commod_ids,
                     )
                 )
+        # time of computing r2 commodities from r1 solution
+        self._synctime_dict["r2"][curr_meta_node] = time.time()-start_time
 
         if self.VERBOSE or debug_r2:
             self._print("--> multi commodity list: ", multi_commodity_list)
@@ -796,6 +800,7 @@ class NCFlowSingleIter(NCFlowAbstract):
         edge_idx = {(edge[0], edge[1]): e for e, edge in enumerate(edges_list)}
         print("edges in recon: {}".format(edge_idx))
 
+        start_time = time.time()
         # Only use the meta_sol_dicts from R2
         u_meta_sol_dict, v_meta_sol_dict = (
             self.r2_meta_sols_dicts[u_meta],
@@ -828,6 +833,9 @@ class NCFlowSingleIter(NCFlowAbstract):
             > 0
         ]
         # print("--> cmc: ", len(common_meta_commods), ' ', common_meta_commods)
+        # time of computing recon commodities from r1 solution
+        self._synctime_dict["reconciliation"][
+            (u_meta, v_meta)] = time.time() - start_time
 
         # 2) Construct model
         m = Model(
@@ -1076,6 +1084,7 @@ class NCFlowSingleIter(NCFlowAbstract):
 
         # R1
         self._runtime_dict = {}
+        self._synctime_dict = {"r2":{}, "reconciliation":{}, "kirchoffs":{}}
         if self.VERBOSE:
             self._print("R1")
 
@@ -1084,6 +1093,7 @@ class NCFlowSingleIter(NCFlowAbstract):
         r1_solver.solve_lp(r1_method)
         self._runtime_dict["r1"] = r1_solver.model.Runtime
         self.r1_obj_val = r1_solver.obj_val
+        start_time = time.time()
         self.r1_sol_mat = self.extract_sol_as_mat(
             r1_solver.model, self.G_meta, self._r1_path_to_commod, self._r1_paths
         )
@@ -1093,6 +1103,8 @@ class NCFlowSingleIter(NCFlowAbstract):
             self._r1_path_to_commod,
             self._r1_paths,
         )
+        # time of getting r1 solution dict for next steps
+        self._synctime_dict["r1"] = time.time() - start_time
 
         if self.VERBOSE:
             self._print(self.r1_sol_dict)
@@ -1167,6 +1179,7 @@ class NCFlowSingleIter(NCFlowAbstract):
                 # Extract flows from the R2 LP, divided into 2 groups:
                 # 1) the intra flows (as individual commodities)
                 # 2) the inter flows (as meta-commodities)
+                start_time = time.time()
                 (
                     intra_sol_dict,
                     meta_sol_dict,
@@ -1189,6 +1202,8 @@ class NCFlowSingleIter(NCFlowAbstract):
                     r2_solver.model, G_hat, len(multi_commodity_list), r2_all_paths
                 )
                 self.r2_sols_mats.append(r2_sol_mat)
+                # time of getting r2 solution dict for next steps
+                self._synctime_dict["r2"][meta_node_id] += time.time() - start_time
 
                 if self.VERBOSE:
                     self._print("Intra sol dict for R2: {}".format(intra_sol_dict))
@@ -1276,11 +1291,15 @@ class NCFlowSingleIter(NCFlowAbstract):
             self.G_u_meta_v_metas.append(G_u_meta_v_meta)
 
             # Extract reconciliation solution
+            start_time = time.time()
             reconciliation_sol_dict = self.extract_reconciliation_sol_as_dict(
                 reconciliation_solver.model,
                 meta_commod_u_out_v_in,
                 list(G_u_meta_v_meta.edges),
             )
+            # time of getting recon solution dict for next steps
+            self._synctime_dict["reconciliation"][
+                (u_meta, v_meta)] += time.time() - start_time
 
             if self.VERBOSE:
                 self._print(meta_commod_u_out_v_in)
@@ -1317,7 +1336,7 @@ class NCFlowSingleIter(NCFlowAbstract):
                         k_meta, rmof_u, rmif_v, after_recon_flow[k_meta]
                     )
                 )
-                recon_loss[k_meta] = min(rmof_u, rmif_v) - after_recon_flow[k_meta]
+                recon_loss[k_meta] = min(rmof_u, rmif_v) - after_recon_flow[k_meta]    
 
             if self.VERBOSE:
                 self._print(
@@ -1365,6 +1384,7 @@ class NCFlowSingleIter(NCFlowAbstract):
             self._runtime_dict["kirchoffs"][
                 (s_k_meta, t_k_meta)
             ] = kirchoffs_solver.model.Runtime
+            start_time = time.time()
             flow_per_commod = self._extract_kirchoffs_sol(
                 kirchoffs_solver.model, orig_commod_list_in_k_meta
             )
@@ -1373,10 +1393,13 @@ class NCFlowSingleIter(NCFlowAbstract):
             for k, _ in orig_commod_list_in_k_meta:
                 adjusted_meta_demand += flow_per_commod[k]
                 self.kirchoff_flow_per_commod[k] = flow_per_commod[k]
-
+            
             adjusted_meta_commodity_list.append(
                 (k_meta, (s_k_meta, t_k_meta, adjusted_meta_demand))
             )
+            # time of getting recon solution dict for next steps
+            self._synctime_dict["kirchoffs"][
+                (s_k_meta, t_k_meta)] = time.time() - start_time
 
         if self.VERBOSE:
             self._print("\nadjusted meta commodity list", adjusted_meta_commodity_list)
@@ -1390,12 +1413,15 @@ class NCFlowSingleIter(NCFlowAbstract):
         r3_solver.gurobi_out = self.out.name.replace(".txt", "-r3.txt")
         r3_solver.solve_lp()
         self._runtime_dict["r3"] = r3_solver.model.Runtime
+        start_time = time.time()
         self.r3_sol_dict = self.extract_sol_as_dict(
             r3_solver.model,
             adjusted_meta_commodity_list,
             self._r3_path_to_commod,
             self._r3_paths,
         )
+        # time of getting r3 solution dict
+        self._synctime_dict["r3"] = time.time() - start_time
         self._save_pkl(
             self.r3_sol_dict, self.out.name.replace(".txt", "-r3-sol-dict.pkl")
         )
@@ -1403,6 +1429,7 @@ class NCFlowSingleIter(NCFlowAbstract):
         self.r3_obj_val = 0.0
         # Use original meta commod keys, instead of meta commod keys with
         # adjusted demands
+        start_time = time.time()
         self.inter_sol_dict = {}
         for meta_commod_key, flow_list in self.r3_sol_dict.items():
             k_meta, (s_k_meta, _, _) = meta_commod_key
@@ -1411,6 +1438,8 @@ class NCFlowSingleIter(NCFlowAbstract):
                 self._print("reading r3: ", meta_commod_key, " flow_val: ", flow_val)
             self.r3_obj_val += flow_val
             self.inter_sol_dict[self.meta_commodity_list[k_meta]] = flow_list
+        # time of getting inter_sol_dict from r3
+        self._synctime_dict["r3"] += time.time() - start_time
 
         self._obj_val = sum(self.intra_obj_vals) + self.r3_obj_val
 
