@@ -80,6 +80,8 @@ for key, vals in GROUPED_BY_HOLDOUT_PROBLEMS.items():
 
 # This should be called when `many_problems` is False
 def get_problem(args):
+    if (args.topo, args.tm_model, args.scale_factor) not in GROUPED_BY_PROBLEMS:
+        raise Exception('Traffic matrices not found')
     topo_fname, tm_fname = GROUPED_BY_PROBLEMS[
         (args.topo, args.tm_model, args.scale_factor)
     ][args.slice]
@@ -100,6 +102,8 @@ def get_problems(args):
                 and ("all" in args.scale_factors or scale_factor in args.scale_factors)
             ):
                 problems.append((problem_name, topo_fname, tm_fname))
+    if not problems:
+        raise Exception('Traffic matrices not found')
     return problems[args.slice_start:args.slice_stop]
 
 
