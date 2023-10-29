@@ -20,6 +20,7 @@ PROBLEM_NAMES = [
 ]
 TM_MODELS = [
     "real",
+    "toy",
 ]
 SCALE_FACTORS = [1.0]
 

@@ -83,7 +83,7 @@ class TrafficMatrix(object):
     def from_file(cls, fname):
         if fname.endswith(".pkl"):
             with open(fname, "rb") as f:
-                tm = pickle.load(f)
+                tm = pickle.load(f).astype('float64')
         elif fname.endswith(".txt"):
             tm = np.loadtxt(fname)
         else:
@@ -111,7 +111,7 @@ class TrafficMatrix(object):
                 seed=seed,
                 scale_factor=scale_factor,
             )
-        elif model == "real":
+        elif model == "real" or model == 'toy':
             vals = os.path.basename(fname)[:-4].split("_")
             date, time = vals[0], vals[1]
             return RealTrafficMatrix(
