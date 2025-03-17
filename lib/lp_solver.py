@@ -2,7 +2,7 @@ from gurobipy import GurobiError
 import cvxpy as cp
 from enum import Enum, unique
 import sys
-CVXPY_SOLVER = cp.CBC
+CVXPY_SOLVER = cp.ECOS
 
 @unique
 class Method(Enum):

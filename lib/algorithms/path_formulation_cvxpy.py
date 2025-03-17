@@ -4,6 +4,7 @@ import pickle
 import re
 from collections import defaultdict
 import time
+from tqdm import tqdm
 
 import numpy as np
 import cvxpy as cp
@@ -19,7 +20,6 @@ from ..path_utils import find_paths, graph_copy_with_edge_weights, remove_cycles
 from .abstract_formulation import AbstractFormulation, Objective
 
 PATHS_DIR = os.path.join(TOPOLOGIES_DIR, "paths", "path-form")
-CVXPY_SOLVER = cp.CBC
 
 class PathFormulationCVXPY(AbstractFormulation):
     @classmethod
@@ -284,7 +284,7 @@ class PathFormulationCVXPY(AbstractFormulation):
     def compute_paths(problem, num_paths, edge_disjoint, dist_metric):
         paths_dict = {}
         G = graph_copy_with_edge_weights(problem.G, dist_metric)
-        for s_k in G.nodes:
+        for s_k in tqdm(G.nodes):
             for t_k in G.nodes:
                 if s_k == t_k:
                     continue
@@ -310,6 +310,7 @@ class PathFormulationCVXPY(AbstractFormulation):
                 return paths_dict
         except FileNotFoundError:
             print("Unable to find {}".format(paths_fname))
+            print("Computing paths...")
             paths_dict = PathFormulationCVXPY.compute_paths(
                 problem, num_paths, edge_disjoint, dist_metric
             )
