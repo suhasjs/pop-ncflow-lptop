@@ -3,9 +3,11 @@ import os
 import pickle
 import re
 from collections import defaultdict
+import time
 
 import numpy as np
 import cvxpy as cp
+from scipy.sparse import csr_array
 
 from gurobipy import GRB  # kept for constants if needed
 
@@ -200,6 +202,74 @@ class PathFormulationCVXPY(AbstractFormulation):
             print(prob)
 
         return CvxpySolver(prob, path_vars, additional_vars, self.DEBUG, self.VERBOSE, self.out)
+    
+    # flow caps = [((k1, ..., kn), f1), ...]
+    def _construct_path_lp_matrix(self, G, edge_to_paths, num_total_paths, sat_flows=[]):
+        self._print("Constructing Path LP (using CVXPY)")
+
+        # Create cvxpy variable for each path
+        path_vars = cp.Variable(num_total_paths, nonneg=True, name="f")
+        print(f"# Paths: {num_total_paths}")
+        constraints = []
+        additional_vars = {}
+
+        assert self._objective == Objective.TOTAL_FLOW, "Matrix formulation only supports TOTAL_FLOW objective"
+        assert len(sat_flows) == 0, "Matrix formulation only supports empty satisfied flows list"
+
+        self._print("TOTAL FLOW objective")
+        objective_expr = cp.sum(path_vars)
+        obj_direction = cp.Maximize(objective_expr)
+
+        def get_sparse_representation(paths, num_vars, row_num=0):
+            row_vals = [row_num] * len(paths)
+            col_vals = [p for p in paths]
+            data = [1] * len(paths)
+            return row_vals, col_vals, data
+
+        mat_row, mat_col, mat_data = [], [], []
+        rhs_vec = []
+        row_id = 0
+        # Edge capacity constraints
+        num_edges = 0
+        for u, v, c_e in G.edges.data("capacity"):
+            num_edges += 1
+            if (u, v) in edge_to_paths:
+                paths = edge_to_paths[(u, v)]
+                row, col, data = get_sparse_representation(paths, num_total_paths, row_num=row_id)
+                row_id += 1
+                mat_row.extend(row)
+                mat_col.extend(col)
+                mat_data.extend(data)
+                rhs_vec.append(c_e)
+                # constraints.append(cp.sum(cp.multiply(path_vars, sparse_paths)) <= c_e)
+                # constraints.append(sparse_paths @ path_vars <= c_e)
+        print(f"# Edges: {num_edges}")
+
+        # Demand constraints
+        print(f"# Commodities: {len(self.commodities)}")
+        commod_id_to_path_inds = {}
+        self._demand_constrs = []
+        for k, d_k, path_ids in self.commodities:
+            commod_id_to_path_inds[k] = path_ids
+            row, col, data = get_sparse_representation(path_ids, num_total_paths, row_num=row_id)
+            row_id += 1
+            mat_row.extend(row)
+            mat_col.extend(col)
+            mat_data.extend(data)
+            rhs_vec.append(d_k)
+            # constraints.append(cp.sum(cp.multiply(path_vars, sparse_paths)) <= d_k)
+            # constraints.append(sparse_paths @ path_vars <= d_k)
+        
+        # Create a sparse csr matrix for the constraints
+        A_sparse = csr_array((mat_data, (mat_row, mat_col)), shape=(len(rhs_vec), num_total_paths))
+        constraints.append(A_sparse @ path_vars <= rhs_vec)
+        prob = cp.Problem(obj_direction, constraints)
+
+        if self.DEBUG:
+            print("CVXPY problem formulation:")
+            print(prob)
+
+        return CvxpySolver(prob, path_vars, additional_vars, self.DEBUG, self.VERBOSE, self.out)
 
     @staticmethod
     def paths_full_fname(problem, num_paths, edge_disjoint, dist_metric):
@@ -299,9 +369,8 @@ class PathFormulationCVXPY(AbstractFormulation):
 
     def _construct_lp(self, sat_flows=[]):
         edge_to_paths, num_paths = self.pre_solve()
-        return self._construct_path_lp(
-            self._problem.G, edge_to_paths, num_paths, sat_flows
-        )
+        # return self._construct_path_lp(self._problem.G, edge_to_paths, num_paths, sat_flows)
+        return self._construct_path_lp_matrix(self._problem.G, edge_to_paths, num_paths, sat_flows)
 
     @property
     def sol_dict(self):
