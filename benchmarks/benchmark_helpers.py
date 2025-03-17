@@ -135,8 +135,8 @@ def get_args_and_problems(
     *,
     many_problems=True,
 ):
-    if not check_gurobi_license():
-        raise Exception("Gurobi license not found")
+    # if not check_gurobi_license():
+    #     raise Exception("Gurobi license not found")
 
     parser = argparse.ArgumentParser()
     parser.add_argument("--dry-run", dest="dry_run", action="store_true", default=False)

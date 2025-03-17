@@ -10,8 +10,10 @@ import sys
 
 sys.path.append("..")
 
-from lib.algorithms import PathFormulation, Objective
+from lib.algorithms import PathFormulation, Objective, PathFormulationCVXPY
 from lib.problem import Problem
+
+PATH_FORMULATION_BACKEND=PathFormulationCVXPY
 
 TOP_DIR = "path-form-logs"
 HEADERS = [
@@ -76,12 +78,13 @@ def benchmark(problems, output_csv, obj):
                     ),
                     "w",
                 ) as log:
-                    pf = PathFormulation(
+                    pf = PATH_FORMULATION_BACKEND(
                         objective=Objective.get_obj_from_str(obj),
                         num_paths=num_paths,
                         edge_disjoint=edge_disjoint,
                         dist_metric=dist_metric,
                         out=log,
+                        VERBOSE=True,
                     )
                     pf.solve(problem)
                     pf_sol_dict = pf.sol_dict

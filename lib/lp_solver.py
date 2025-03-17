@@ -1,7 +1,8 @@
 from gurobipy import GurobiError
+import cvxpy as cp
 from enum import Enum, unique
 import sys
-
+CVXPY_SOLVER = cp.CBC
 
 @unique
 class Method(Enum):
@@ -90,6 +91,39 @@ class LpSolver(object):
             self._print(str(e))
             self._print("Encountered an attribute error")
 
+    @property
+    def model(self):
+        return self._model
+
+    @property
+    def obj_val(self):
+        return self._model.objVal
+
+
+# A helper class to wrap a cvxpy Problem.
+class CvxpySolver:
+    def __init__(self, problem, path_vars, additional_vars, DEBUG, VERBOSE, out):
+        self.problem = problem
+        self.path_vars = path_vars
+        self.additional_vars = additional_vars
+        self.DEBUG = DEBUG
+        self.VERBOSE = VERBOSE
+        self.out = out
+        self.solver = CVXPY_SOLVER  # Assuming CVXPY_SOLVER is defined somewhere in the code
+
+    def solve_lp(
+        self,
+        method=Method.CONCURRENT,
+        num_threads=None,
+        bar_tol=None,
+        err_tol=None,
+        numeric_focus=False,
+    ):
+        self.problem.solve(solver=CVXPY_SOLVER, verbose=self.VERBOSE)
+        print(f"CVXPY problem solved with status: {self.problem.status}")
+        print(f"Solver stats: {self.problem.solver_stats}")
+        return self
+    
     @property
     def model(self):
         return self._model

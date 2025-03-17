@@ -1,22 +1,25 @@
+# Translated by Github Copilot (o3-mini) from the original code in path_form.py
 import os
 import pickle
 import re
 from collections import defaultdict
 
 import numpy as np
-from gurobipy import GRB, Model, quicksum
+import cvxpy as cp
+
+from gurobipy import GRB  # kept for constants if needed
 
 from ..config import TOPOLOGIES_DIR
 from ..constants import NUM_CORES
 from ..graph_utils import path_to_edge_list
-from ..lp_solver import LpSolver
+from ..lp_solver import LpSolver, CvxpySolver  # note: this file now uses CvxpSolver internally
 from ..path_utils import find_paths, graph_copy_with_edge_weights, remove_cycles
 from .abstract_formulation import AbstractFormulation, Objective
 
 PATHS_DIR = os.path.join(TOPOLOGIES_DIR, "paths", "path-form")
+CVXPY_SOLVER = cp.CBC
 
-
-class PathFormulation(AbstractFormulation):
+class PathFormulationCVXPY(AbstractFormulation):
     @classmethod
     def new_total_flow(
         cls, num_paths, edge_disjoint=True, dist_metric="inv-cap", out=None
@@ -110,85 +113,93 @@ class PathFormulation(AbstractFormulation):
 
     # flow caps = [((k1, ..., kn), f1), ...]
     def _construct_path_lp(self, G, edge_to_paths, num_total_paths, sat_flows=[]):
-        self._print("Constructing Path LP")
-        m = Model("max-flow: path formulation")
+        self._print("Constructing Path LP (using CVXPY)")
 
-        # Create variables: one for each path
-        path_vars = m.addVars(num_total_paths, vtype=GRB.CONTINUOUS, lb=0.0, name="f")
+        # Create cvxpy variable for each path
+        path_vars = cp.Variable(num_total_paths, nonneg=True, name="f")
+        print(f"# Paths: {num_total_paths}")
+        constraints = []
+        additional_vars = {}
 
-        # Set objective
         if (self._objective == Objective.MIN_MAX_LINK_UTIL
             or self._objective == Objective.COMPUTE_DEMAND_SCALE_FACTOR):
             self._print("{} objective".format(self._objective))
-
+            # Create variable for maximum link utilization.
+            z = cp.Variable(nonneg=True, name="z")
+            additional_vars["z"] = z
+            # For MIN_MAX_LINK_UTIL, cap z at 1.
             if self._objective == Objective.MIN_MAX_LINK_UTIL:
-                max_link_util_var = m.addVar(
-                    vtype=GRB.CONTINUOUS, lb=0.0, ub=1.0, name="z"
-                )
-            else:
-                # max link util can exceed 1.0
-                max_link_util_var = m.addVar(vtype=GRB.CONTINUOUS, lb=0.0, name="z")
+                constraints.append(z <= 1)
 
-            m.setObjective(max_link_util_var, GRB.MINIMIZE)
-            # Add edge util constraints
+            # Edge utilization constraints
             for u, v, c_e in G.edges.data("capacity"):
                 if (u, v) in edge_to_paths:
                     paths = edge_to_paths[(u, v)]
-                    constr_vars = [path_vars[p] for p in paths]
+                    expr = cp.sum(cp.hstack([path_vars[p] for p in paths]))
                     if c_e == 0.0:
-                        m.addConstr(quicksum(constr_vars) <= 0.0)
+                        constraints.append(expr <= 0)
                     else:
-                        m.addConstr(quicksum(constr_vars) / c_e <= max_link_util_var)
+                        constraints.append(expr / c_e <= z)
 
-            # Add demand equality constraints
+            # Demand equality constraints
             commod_id_to_path_inds = {}
             self._demand_constrs = []
             for k, d_k, path_ids in self.commodities:
                 commod_id_to_path_inds[k] = path_ids
-                self._demand_constrs.append(
-                    m.addConstr(quicksum(path_vars[p] for p in path_ids) == d_k)
-                )
+                constraints.append(cp.sum(cp.hstack([path_vars[p] for p in path_ids])) == d_k)
 
+            objective_expr = z
+            prob = cp.Problem(cp.Minimize(objective_expr), constraints)
         else:
             if self._objective == Objective.TOTAL_FLOW:
                 self._print("TOTAL FLOW objective")
-                obj = quicksum(path_vars)
+                objective_expr = cp.sum(path_vars)
+                obj_direction = cp.Maximize(objective_expr)
             elif self._objective == Objective.MAX_CONCURRENT_FLOW:
                 self._print("MAX CONCURRENT FLOW objective")
-                self.alpha = m.addVar(vtype=GRB.CONTINUOUS, lb=0.0, ub=1.0, name="a")
-                m.update()
+                alpha = cp.Variable(nonneg=True, name="a")
+                additional_vars["alpha"] = alpha
+                constraints.append(alpha <= 1)
                 for k, d_k, path_ids in self.commodities:
-                    m.addConstr(
-                        quicksum(path_vars[p] for p in path_ids) / d_k >= self.alpha
+                    constraints.append(
+                        cp.sum(cp.hstack([path_vars[p] for p in path_ids])) / d_k >= alpha
                     )
-                obj = self.alpha
-            m.setObjective(obj, GRB.MAXIMIZE)
+                objective_expr = alpha
+                obj_direction = cp.Maximize(objective_expr)
+            else:
+                raise Exception("Invalid objective")
 
-            # Add edge capacity constraints
+            # Edge capacity constraints
+            num_edges = 0
             for u, v, c_e in G.edges.data("capacity"):
+                num_edges += 1
                 if (u, v) in edge_to_paths:
                     paths = edge_to_paths[(u, v)]
-                    constr_vars = [path_vars[p] for p in paths]
-                    m.addConstr(quicksum(constr_vars) <= c_e)
-            # Add demand constraints
+                    constraints.append(cp.sum(cp.hstack([path_vars[p] for p in paths])) <= c_e)
+            print(f"# Edges: {num_edges}")
+            # Demand constraints
+            print(f"# Commodities: {len(self.commodities)}")
             commod_id_to_path_inds = {}
             self._demand_constrs = []
             for k, d_k, path_ids in self.commodities:
                 commod_id_to_path_inds[k] = path_ids
-                self._demand_constrs.append(
-                    m.addConstr(quicksum(path_vars[p] for p in path_ids) <= d_k)
+                constraints.append(
+                    cp.sum(cp.hstack([path_vars[p] for p in path_ids])) <= d_k
                 )
+            prob = cp.Problem(obj_direction, constraints)
 
         # Flow cap constraints
         for fixed_commods, flow_value in sat_flows:
-            constr_vars = [
-                path_vars[p] for k in fixed_commods for p in commod_id_to_path_inds[k]
-            ]
-            m.addConstr(quicksum(constr_vars) >= 0.99 * flow_value)
+            indices = []
+            for k in fixed_commods:
+                indices.extend(commod_id_to_path_inds[k])
+            constraints.append(cp.sum(cp.hstack([path_vars[i] for i in indices])) >= 0.99 * flow_value)
 
         if self.DEBUG:
-            m.write("pf_debug.lp")
-        return LpSolver(m, None, self.DEBUG, self.VERBOSE, self.out)
+            print("CVXPY problem formulation:")
+            print(prob)
+
+        return CvxpySolver(prob, path_vars, additional_vars, self.DEBUG, self.VERBOSE, self.out)
 
     @staticmethod
     def paths_full_fname(problem, num_paths, edge_disjoint, dist_metric):
@@ -214,7 +225,7 @@ class PathFormulation(AbstractFormulation):
 
     @staticmethod
     def read_paths_from_disk_or_compute(problem, num_paths, edge_disjoint, dist_metric):
-        paths_fname = PathFormulation.paths_full_fname(
+        paths_fname = PathFormulationCVXPY.paths_full_fname(
             problem, num_paths, edge_disjoint, dist_metric
         )
         print("Loading paths from pickle file", paths_fname)
@@ -229,7 +240,7 @@ class PathFormulation(AbstractFormulation):
                 return paths_dict
         except FileNotFoundError:
             print("Unable to find {}".format(paths_fname))
-            paths_dict = PathFormulation.compute_paths(
+            paths_dict = PathFormulationCVXPY.compute_paths(
                 problem, num_paths, edge_disjoint, dist_metric
             )
             print("Saving paths to pickle file")
@@ -239,7 +250,7 @@ class PathFormulation(AbstractFormulation):
 
     def get_paths(self, problem):
         if not hasattr(self, "_paths_dict"):
-            self._paths_dict = PathFormulation.read_paths_from_disk_or_compute(
+            self._paths_dict = PathFormulationCVXPY.read_paths_from_disk_or_compute(
                 problem, self._num_paths, self.edge_disjoint, self.dist_metric
             )
         return self._paths_dict
@@ -250,8 +261,8 @@ class PathFormulation(AbstractFormulation):
 
     def solve(self, problem, num_threads=NUM_CORES):
         self._problem = problem
-        self._solver = self._construct_lp([])
-        return self._solver.solve_lp(num_threads=num_threads)
+        self._solver = self._construct_lp([], )
+        return self._solver.solve_lp()
 
     def pre_solve(self, problem=None):
         if problem is None:
@@ -274,14 +285,11 @@ class PathFormulation(AbstractFormulation):
             path_ids = []
             for path in paths:
                 self._all_paths.append(path)
-
                 for edge in path_to_edge_list(path):
                     edge_to_paths[edge].append(path_i)
                 path_ids.append(path_i)
-
                 self._path_to_commod[path_i] = k
                 path_i += 1
-
             self.commodities.append((k, d_k, path_ids))
         if self.DEBUG:
             assert len(self._all_paths) == path_i
@@ -299,37 +307,27 @@ class PathFormulation(AbstractFormulation):
     def sol_dict(self):
         if not hasattr(self, "_sol_dict"):
             sol_dict_def = defaultdict(list)
-            for var in self.model.getVars():
-                if var.varName.startswith("f[") and var.x != 0.0:
-                    match = re.match(r"f\[(\d+)\]", var.varName)
-                    p = int(match.group(1))
-                    sol_dict_def[self.commodity_list[self._path_to_commod[p]]] += [
-                        (edge, var.x) for edge in path_to_edge_list(self._all_paths[p])
-                    ]
-
-            # Set zero-flow commodities to be empty lists
+            # Loop over indices of the cvxpy variable (named "f")
+            for p, val in enumerate(self._solver.path_vars.value):
+                if abs(val) > 1e-6:
+                    commod = self.commodity_list[self._path_to_commod[p]]
+                    for edge in path_to_edge_list(self._all_paths[p]):
+                        sol_dict_def[commod].append((edge, val))
             self._sol_dict = {}
             sol_dict_def = dict(sol_dict_def)
             for commod_key in self.problem.commodity_list:
-                if commod_key in sol_dict_def:
-                    self._sol_dict[commod_key] = sol_dict_def[commod_key]
-                else:
-                    self._sol_dict[commod_key] = []
-
+                self._sol_dict[commod_key] = sol_dict_def.get(commod_key, [])
         return self._sol_dict
 
     @property
     def sol_mat(self):
         edge_idx = self.problem.edge_idx
         sol_mat = np.zeros((len(edge_idx), len(self._path_to_commod)), dtype=np.float32)
-        for var in self.model.getVars():
-            if var.varName.startswith("f[") and var.x != 0.0:
-                match = re.match(r"f\[(\d+)\]", var.varName)
-                p = int(match.group(1))
+        for p, val in enumerate(self._solver.path_vars.value):
+            if abs(val) > 1e-6:
                 k = self._path_to_commod[p]
                 for edge in path_to_edge_list(self._all_paths[p]):
-                    sol_mat[edge_idx[edge], k] += var.x
-
+                    sol_mat[edge_idx[edge], k] += val
         return sol_mat
 
     @classmethod
@@ -364,5 +362,10 @@ class PathFormulation(AbstractFormulation):
     @property
     def runtime(self):
         if not hasattr(self, "_runtime"):
-            self._runtime = self._solver.model.Runtime
+            # If available, extract solve time from the solver statistics.
+            self._runtime = (
+                self._solver.problem.solver_stats.solve_time
+                if hasattr(self._solver.problem, "solver_stats")
+                else None
+            )
         return self._runtime
