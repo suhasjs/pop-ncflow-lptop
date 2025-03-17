@@ -138,6 +138,7 @@ if __name__ == "__main__":
         os.makedirs(TOP_DIR)
 
     args, output_csv, problems = get_args_and_problems(OUTPUT_CSV_TEMPLATE)
+    print(problems)
 
     if args.dry_run:
         print("Problems to run:")
