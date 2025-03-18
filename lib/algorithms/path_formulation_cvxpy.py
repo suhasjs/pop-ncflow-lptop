@@ -5,12 +5,14 @@ import re
 from collections import defaultdict
 import time
 from tqdm import tqdm
+from itertools import product
+import ray
+import multiprocessing as mp
+from tqdm.contrib.concurrent import process_map as parallel_map
 
 import numpy as np
 import cvxpy as cp
 from scipy.sparse import csr_array
-
-from gurobipy import GRB  # kept for constants if needed
 
 from ..config import TOPOLOGIES_DIR
 from ..constants import NUM_CORES
@@ -20,6 +22,13 @@ from ..path_utils import find_paths, graph_copy_with_edge_weights, remove_cycles
 from .abstract_formulation import AbstractFormulation, Objective
 
 PATHS_DIR = os.path.join(TOPOLOGIES_DIR, "paths", "path-form")
+
+# @ray.remote
+def _compute_paths_worker(args):
+    s_k, t_k, num_paths, edge_disjoint, G = args
+    paths = find_paths(G, s_k, t_k, num_paths, edge_disjoint)
+    paths_no_cycles = [remove_cycles(path) for path in paths]
+    return ((s_k, t_k), paths_no_cycles)
 
 class PathFormulationCVXPY(AbstractFormulation):
     @classmethod
@@ -279,6 +288,24 @@ class PathFormulationCVXPY(AbstractFormulation):
                 problem.name, num_paths, edge_disjoint, dist_metric
             ),
         )
+    
+    
+    @staticmethod
+    def compute_paths_parallel(problem, num_paths, edge_disjoint, dist_metric):
+        paths_dict = {}
+        G = graph_copy_with_edge_weights(problem.G, dist_metric)
+        nodes = list(G.nodes)
+        # Create a list of tasks for each (s_k,t_k) pair where s_k != t_k
+        tasks = [
+            (s, t, num_paths, edge_disjoint, G)
+            for s, t in product(nodes, nodes) if s != t
+        ]
+        print(f"# Tasks: {len(tasks)}")
+        results = parallel_map(_compute_paths_worker, tasks, max_workers=NUM_CORES, chunksize=128)
+        # Collect the results into a dictionary
+        for key, paths_no_cycles in results:
+            paths_dict[key] = paths_no_cycles
+        return paths_dict
 
     @staticmethod
     def compute_paths(problem, num_paths, edge_disjoint, dist_metric):
@@ -311,7 +338,7 @@ class PathFormulationCVXPY(AbstractFormulation):
         except FileNotFoundError:
             print("Unable to find {}".format(paths_fname))
             print("Computing paths...")
-            paths_dict = PathFormulationCVXPY.compute_paths(
+            paths_dict = PathFormulationCVXPY.compute_paths_parallel(
                 problem, num_paths, edge_disjoint, dist_metric
             )
             print("Saving paths to pickle file")
