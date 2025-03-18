@@ -10,10 +10,10 @@ import sys
 
 sys.path.append("..")
 
-from lib.algorithms import PathFormulation, Objective, PathFormulationCVXPY
+from lib.algorithms import PathFormulation, Objective, PathFormulationCVXPY, PathFormulationALCD
 from lib.problem import Problem
 
-PATH_FORMULATION_BACKEND=PathFormulationCVXPY
+PATH_FORMULATION_BACKEND=PathFormulationALCD
 
 TOP_DIR = "path-form-logs"
 HEADERS = [

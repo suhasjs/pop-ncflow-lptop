@@ -273,6 +273,7 @@ class PathFormulationCVXPY(AbstractFormulation):
         A_sparse = csr_array((mat_data, (mat_row, mat_col)), shape=(len(rhs_vec), num_total_paths))
         constraints.append(A_sparse @ path_vars <= rhs_vec)
         prob = cp.Problem(obj_direction, constraints)
+        self.cvxpy_problem = prob
 
         if self.DEBUG:
             print("CVXPY problem formulation:")
@@ -359,8 +360,16 @@ class PathFormulationCVXPY(AbstractFormulation):
 
     def solve(self, problem, num_threads=NUM_CORES):
         self._problem = problem
+        start_t = time.time()
         self._solver = self._construct_lp([], )
-        return self._solver.solve_lp()
+        self._setup_time = time.time() - start_t
+        ret = self._solver.solve_lp()
+        self._solve_time = time.time() - start_t - self._setup_time
+        print(f"Solver times -- setup: {self._setup_time:.2f}s, solve: {self._solve_time:.2f}s")
+        self._runtime = self._solve_time + self._setup_time
+        self._obj_val = self.cvxpy_problem.value
+        print(f"Total solver time: {self.runtime:.2f}s, objective: {self.obj_val:.2f}")
+        return ret
 
     def pre_solve(self, problem=None):
         if problem is None:
@@ -416,6 +425,7 @@ class PathFormulationCVXPY(AbstractFormulation):
                 self._sol_dict[commod_key] = sol_dict_def.get(commod_key, [])
         return self._sol_dict
 
+    # (suhasjs): WARNING -- this might not be accurate (not used anywhere, so not tested)
     @property
     def sol_mat(self):
         edge_idx = self.problem.edge_idx

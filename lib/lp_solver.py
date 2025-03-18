@@ -2,7 +2,9 @@ from gurobipy import GurobiError
 import cvxpy as cp
 from enum import Enum, unique
 import sys
-CVXPY_SOLVER = cp.ECOS
+import numpy as np
+import ortools.pdlp.solvers_pb2 as pdlp_pb
+CVXPY_SOLVER = cp.CLARABEL
 
 @unique
 class Method(Enum):
@@ -99,7 +101,6 @@ class LpSolver(object):
     def obj_val(self):
         return self._model.objVal
 
-
 # A helper class to wrap a cvxpy Problem.
 class CvxpySolver:
     def __init__(self, problem, path_vars, additional_vars, DEBUG, VERBOSE, out):
@@ -119,9 +120,27 @@ class CvxpySolver:
         err_tol=None,
         numeric_focus=False,
     ):
-        self.problem.solve(solver=CVXPY_SOLVER, verbose=self.VERBOSE)
+        if CVXPY_SOLVER == cp.PIQP:
+            self.problem.solve(solver=CVXPY_SOLVER, verbose=self.VERBOSE, eps_rel=1e-3)
+        elif CVXPY_SOLVER == cp.CLARABEL:
+            self.problem.solve(solver=CVXPY_SOLVER, verbose=self.VERBOSE, tol_gap_rel=1e-3)
+        elif CVXPY_SOLVER == cp.PDLP:
+            params = pdlp_pb.PrimalDualHybridGradientParams()
+            params.termination_criteria.eps_optimal_absolute = 5e-2
+            params.termination_criteria.time_sec_limit = 300
+            params.num_threads = 1
+            solver_opts = {
+                'parameters_proto': params,
+                'verbose': self.VERBOSE,
+                'time_sec_limit' : 300
+            }
+            self.problem.solve(solver=cp.PDLP, **solver_opts)
+        else:
+            self.problem.solve(solver=CVXPY_SOLVER, verbose=self.VERBOSE)
         print(f"CVXPY problem solved with status: {self.problem.status}")
         print(f"Solver stats: {self.problem.solver_stats}")
+        # print histogram of path vars.value
+        print(f"Path vars hist: {list(zip(*np.histogram(self.path_vars.value, bins=20)))}")
         return self
     
     @property
