@@ -11,6 +11,8 @@ from .path_formulation_cvxpy import PathFormulationCVXPY
 
 import pylpsparse as lps
 
+SCALING_CONSTANT = 5
+
 class PathFormulationALCD(PathFormulationCVXPY):
   def __init__(
     self,
@@ -55,12 +57,12 @@ class PathFormulationALCD(PathFormulationCVXPY):
       num_edges += 1
       if (u, v) in edge_to_paths:
         paths = edge_to_paths[(u, v)]
-        col, data = paths, [1] * len(paths)
+        col, data = paths, [SCALING_CONSTANT] * len(paths)
         mi += 1
         nnz += len(data)
         mat_cols.append(col)
         mat_data.append(data)
-        rhs_vec.append(c_e)
+        rhs_vec.append(c_e * SCALING_CONSTANT)
     print(f"# Edges: {num_edges}")
 
     # Demand constraints
@@ -69,12 +71,12 @@ class PathFormulationALCD(PathFormulationCVXPY):
     self._demand_constrs = []
     for k, d_k, path_ids in self.commodities:
       commod_id_to_path_inds[k] = path_ids
-      col, data = path_ids, [1] * len(path_ids)
+      col, data = path_ids, [SCALING_CONSTANT] * len(path_ids)
       mi += 1
       nnz += len(data)
       mat_cols.append(col)
       mat_data.append(data)
-      rhs_vec.append(d_k)
+      rhs_vec.append(d_k * SCALING_CONSTANT)
     
     print(f"ALCD Constraint matrix: {mi} inequalities, {me} equalities, {nnz} non-zero entries")
     print(f"ALCD Variables: {nb} non-basic, {nf} free")
@@ -129,17 +131,18 @@ class PathFormulationALCD(PathFormulationCVXPY):
     # TODO (suhasjs) --> Why does reducing eta help us here??
     lpcfg.eta = 1
     lpcfg.verbose = True
-    lpcfg.tol_trans = 5e-2
-    lpcfg.tol = 5e-2
+    lpcfg.tol_trans = 0.1
+    lpcfg.tol = 0.1
     # lpcfg.tol_sub = args.alcd_tol
     lpcfg.tol_sub = 1e-2
     lpcfg.use_CG = True
     lpcfg.max_iter = 1000
     lpcfg.inner_max_iter = 5
     lpcfg.primal_max_iter = 10
-    lpcfg.primal_inner_max_iter = 10
-    lpcfg.dual_max_iter = 50
-    lpcfg.dual_inner_max_iter = 5
+    lpcfg.primal_inner_max_iter = 5
+    lpcfg.pinf_dinf_ratio = 10
+    lpcfg.dual_max_iter = 20
+    lpcfg.dual_inner_max_iter = 3
     lpcfg.corrector_max_iter = 2
     lpcfg.penalty_alpha = 0
 
