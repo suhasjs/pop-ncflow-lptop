@@ -358,7 +358,7 @@ class PathFormulationCVXPY(AbstractFormulation):
     # Override superclass methods #
     ###############################
 
-    def solve(self, problem, num_threads=NUM_CORES):
+    def solve(self, problem, num_threads=NUM_CORES, state={}):
         self._problem = problem
         start_t = time.time()
         self._solver = self._construct_lp([], )
@@ -369,7 +369,7 @@ class PathFormulationCVXPY(AbstractFormulation):
         self._runtime = self._solve_time + self._setup_time
         self._obj_val = self.cvxpy_problem.value
         print(f"Total solver time: {self.runtime:.2f}s, objective: {self.obj_val:.2f}")
-        return ret
+        return ret, state
 
     def pre_solve(self, problem=None):
         if problem is None:
@@ -388,6 +388,7 @@ class PathFormulationCVXPY(AbstractFormulation):
         paths_dict = self.get_paths(problem)
         path_i = 0
         for k, (s_k, t_k, d_k) in self.commodity_list:
+            # print(f"k: {k}, s_k: {s_k}, t_k: {t_k}, d_k: {d_k}")
             paths = paths_dict[(s_k, t_k)]
             path_ids = []
             for path in paths:

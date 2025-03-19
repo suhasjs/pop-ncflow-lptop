@@ -41,6 +41,7 @@ OUTPUT_CSV_TEMPLATE = "path-form-{}-{}.csv"
 # runtime and total flow for each algorithm
 def benchmark(problems, output_csv, obj):
     num_paths, edge_disjoint, dist_metric = PATH_FORM_HYPERPARAMS
+    state = {}
     with open(output_csv, "a") as results:
         print_(",".join(HEADERS), file=results)
         for problem_name, topo_fname, tm_fname in problems:
@@ -86,7 +87,7 @@ def benchmark(problems, output_csv, obj):
                         out=log,
                         VERBOSE=True,
                     )
-                    pf.solve(problem)
+                    ret, state = pf.solve(problem, state=state)
                     pf_sol_dict = pf.sol_dict
                     with open(
                         os.path.join(
