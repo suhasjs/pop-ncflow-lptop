@@ -650,6 +650,7 @@ class RealTrafficMatrix(TrafficMatrix):
     def _update(self, scale_factor, type, **kwargs):
         if type == "uniform":
             alpha = kwargs["alpha"]
+            print(f"Perturbing traffic matrix with uniform distribution: alpha: {alpha}")
             assert alpha > 0.0
 
             def new_val(val):
@@ -658,6 +659,7 @@ class RealTrafficMatrix(TrafficMatrix):
                 return max(0, val * (1 + alpha * uni_rand(-1, 1)))
 
         elif type == "scale":
+            print(f"Perturbing traffic matrix with scale factor: {scale_factor}")
             assert scale_factor > 0.0
 
             def new_val(val):

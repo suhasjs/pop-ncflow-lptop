@@ -1,4 +1,5 @@
 import numpy as np
+import gurobipy as gp
 from collections import defaultdict
 
 # sort commods from lowest demand to highest demand
@@ -106,3 +107,20 @@ def link_util_stats(G, sol_dict):
     values = list(edge_utils.values())
 
     return np.min(values), np.median(values), np.mean(values), np.max(values)
+
+GUROBI_WLS_FILE = "/home/sauce/gurobi.lic"
+
+def setup_gurobi_wls_env():
+    with open(GUROBI_WLS_FILE, "r") as f:
+        lines = f.readlines()
+    # create a dict out of each line
+    license_info = {}
+    for line in lines:
+        if '=' not in line:
+            continue
+        else:
+            key, value = line.split('=')
+            license_info[key.strip()] = value.strip()
+    license_info["LICENSEID"] = int(license_info["LICENSEID"])
+    env = gp.Env(params=license_info)
+    return env

@@ -5,6 +5,7 @@ from benchmark_helpers import get_args_and_problems, print_, PATH_FORM_HYPERPARA
 import os
 import pickle
 import traceback
+import time
 
 import sys
 
@@ -13,7 +14,7 @@ sys.path.append("..")
 from lib.algorithms import PathFormulation, Objective, PathFormulationCVXPY, PathFormulationALCD
 from lib.problem import Problem
 
-PATH_FORMULATION_BACKEND=PathFormulationALCD
+PATH_FORMULATION_BACKEND=PathFormulationCVXPY
 
 TOP_DIR = "path-form-logs"
 HEADERS = [
@@ -45,6 +46,7 @@ def benchmark(problems, output_csv, obj):
     with open(output_csv, "a") as results:
         print_(",".join(HEADERS), file=results)
         for problem_name, topo_fname, tm_fname in problems:
+            print(f"Problem: {problem_name}, Topo: {topo_fname}, TM: {tm_fname}")
             problem = Problem.from_file(topo_fname, tm_fname)
             print_(problem_name, tm_fname)
             traffic_seed = problem.traffic_matrix.seed
@@ -87,7 +89,9 @@ def benchmark(problems, output_csv, obj):
                         out=log,
                         VERBOSE=True,
                     )
+                    start_t = time.time()
                     ret, state = pf.solve(problem, state=state)
+                    print(f"End-to-end solve took: {time.time() - start_t:.2f} seconds")
                     pf_sol_dict = pf.sol_dict
                     with open(
                         os.path.join(

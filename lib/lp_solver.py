@@ -4,7 +4,8 @@ from enum import Enum, unique
 import sys
 import numpy as np
 import ortools.pdlp.solvers_pb2 as pdlp_pb
-CVXPY_SOLVER = cp.CLARABEL
+from .utils import setup_gurobi_wls_env
+CVXPY_SOLVER = cp.GUROBI
 
 @unique
 class Method(Enum):
@@ -13,7 +14,6 @@ class Method(Enum):
     BARRIER = 2
     CONCURRENT = 3
     PRIMAL_AND_DUAL = 4
-
 
 class LpSolver(object):
     def __init__(
@@ -135,6 +135,8 @@ class CvxpySolver:
                 'time_sec_limit' : 300
             }
             self.problem.solve(solver=cp.PDLP, **solver_opts)
+        elif CVXPY_SOLVER == cp.GUROBI:
+            self.problem.solve(solver=CVXPY_SOLVER, verbose=self.VERBOSE, warm_start=self.path_vars.value is not None, env=setup_gurobi_wls_env())
         else:
             self.problem.solve(solver=CVXPY_SOLVER, verbose=self.VERBOSE)
         print(f"CVXPY problem solved with status: {self.problem.status}")

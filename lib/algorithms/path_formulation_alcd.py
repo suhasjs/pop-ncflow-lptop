@@ -32,7 +32,8 @@ class PathFormulationALCD(PathFormulationCVXPY):
   
   # flow caps = [((k1, ..., kn), f1), ...]
   def _construct_path_lp_matrix(self, G, edge_to_paths, num_total_paths, sat_flows=[]):
-    self._print("Constructing Path LP for ALCD solver")
+    print("Constructing Path LP for ALCD solver")
+    start_t = time.time()
 
     # Create cvxpy variable for each path
     self._path_vars = np.zeros(num_total_paths)
@@ -65,6 +66,7 @@ class PathFormulationALCD(PathFormulationCVXPY):
           mat_data.append(data)
         rhs_vec.append(c_e * SCALING_CONSTANT)
     print(f"# Edges: {num_edges}")
+    print(f"t={time.time() - start_t:.2f}s: Processed edge capacity constraints..")
 
     # Demand constraints
     print(f"# Commodities: {len(self.commodities)}")
@@ -78,6 +80,7 @@ class PathFormulationALCD(PathFormulationCVXPY):
         mat_cols.append(col)
         mat_data.append(data)
       rhs_vec.append(d_k * SCALING_CONSTANT)
+    print(f"t={time.time() - start_t:.2f}s: Processed demand constraints..")
     
     print(f"ALCD Constraint matrix: {mi} inequalities, {me} equalities, {nnz} non-zero entries")
     print(f"ALCD Variables: {nb} non-basic, {nf} free")
@@ -105,6 +108,7 @@ class PathFormulationALCD(PathFormulationCVXPY):
     self.nb, self.nf = nb, nf
     self.mi, self.me = mi, me
     self.m = mi
+    print(f"t={time.time() - start_t:.2f}s: Finished all constraints..")
     return self
   
   def solve(self, problem, num_threads=8, state={}):
@@ -139,7 +143,7 @@ class PathFormulationALCD(PathFormulationCVXPY):
     # TODO (suhasjs) --> Why does reducing eta help us here??
     lpcfg.eta = 1
     lpcfg.verbose = True
-    lpcfg.tol_trans = 1.1
+    lpcfg.tol_trans = 0.1
     lpcfg.tol = 0.1
     # lpcfg.tol_sub = args.alcd_tol
     lpcfg.tol_sub = 1e-2
@@ -147,11 +151,11 @@ class PathFormulationALCD(PathFormulationCVXPY):
     lpcfg.max_iter = 1000
     lpcfg.inner_max_iter = 5
     lpcfg.primal_max_iter = 10
-    lpcfg.primal_inner_max_iter = 5
-    lpcfg.pinf_dinf_ratio = 1
-    lpcfg.dual_max_iter = 20
+    lpcfg.primal_inner_max_iter = 10
+    lpcfg.pinf_dinf_ratio = 5
+    lpcfg.dual_max_iter = 50
     lpcfg.dual_inner_max_iter = 3
-    lpcfg.corrector_max_iter = 2
+    lpcfg.corrector_max_iter = 1
     lpcfg.penalty_alpha = 0
 
     # Initialize ALCD solver
@@ -191,7 +195,7 @@ class PathFormulationALCD(PathFormulationCVXPY):
     solve_start_time = time.time()
     print(f"Solving using ALCD solver")
     # lps.solve_alcd(A, b, c, x0, w0, h2jj, hjj_ubound, nb, nf, m, me, lpcfg, lpinfo)
-    lps.solve_alcd(A, b, c, x0, w0, h2jj, hjj_ubound, nb, nf, m, me, lpcfg, lpinfo)
+    lps.solve_alcd_corrector(A, b, c, x0, w0, h2jj, hjj_ubound, nb, nf, m, me, lpcfg, lpinfo)
     solve_end_time = time.time()
     print(f"ALCD solver stats: {lps.lpinfo_to_dict(lpinfo)}")
     print(f"ALCD Solver: Init: {(init_end_time - init_start_time)*1000:.1f}ms, Solve time: {(solve_end_time - solve_start_time)*1000:.1f}ms")

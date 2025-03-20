@@ -20,6 +20,7 @@ from ..graph_utils import path_to_edge_list
 from ..lp_solver import LpSolver, CvxpySolver  # note: this file now uses CvxpSolver internally
 from ..path_utils import find_paths, graph_copy_with_edge_weights, remove_cycles
 from .abstract_formulation import AbstractFormulation, Objective
+from .path_formulation import setup_gurobi_wls_env
 
 PATHS_DIR = os.path.join(TOPOLOGIES_DIR, "paths", "path-form")
 
@@ -218,6 +219,9 @@ class PathFormulationCVXPY(AbstractFormulation):
 
         # Create cvxpy variable for each path
         path_vars = cp.Variable(num_total_paths, nonneg=True, name="f")
+        if 'x0' in self.state:
+            print(f"Initializing solution from previous run...")
+            path_vars.value = self.state['x0']
         print(f"# Paths: {num_total_paths}")
         constraints = []
         additional_vars = {}
@@ -359,6 +363,7 @@ class PathFormulationCVXPY(AbstractFormulation):
     ###############################
 
     def solve(self, problem, num_threads=NUM_CORES, state={}):
+        self.state = state
         self._problem = problem
         start_t = time.time()
         self._solver = self._construct_lp([], )
@@ -368,10 +373,12 @@ class PathFormulationCVXPY(AbstractFormulation):
         print(f"Solver times -- setup: {self._setup_time:.2f}s, solve: {self._solve_time:.2f}s")
         self._runtime = self._solve_time + self._setup_time
         self._obj_val = self.cvxpy_problem.value
+        self.state['x0'] = self._solver.path_vars.value.copy()
         print(f"Total solver time: {self.runtime:.2f}s, objective: {self.obj_val:.2f}")
         return ret, state
 
     def pre_solve(self, problem=None):
+        presolve_start = time.time()
         if problem is None:
             problem = self.problem
 
@@ -380,12 +387,14 @@ class PathFormulationCVXPY(AbstractFormulation):
             if self._warm_start_mode
             else problem.commodity_list
         )
+        print(f"t={time.time() - presolve_start:.2f}s: commodity_list extracted, size={len(self.commodity_list)}")
         self.commodities = []
         edge_to_paths = defaultdict(list)
         self._path_to_commod = {}
         self._all_paths = []
 
         paths_dict = self.get_paths(problem)
+        print(f"t={time.time() - presolve_start:.2f}s: paths_dict extracted, size={len(paths_dict)}")
         path_i = 0
         for k, (s_k, t_k, d_k) in self.commodity_list:
             # print(f"k: {k}, s_k: {s_k}, t_k: {t_k}, d_k: {d_k}")
@@ -401,12 +410,15 @@ class PathFormulationCVXPY(AbstractFormulation):
             self.commodities.append((k, d_k, path_ids))
         if self.DEBUG:
             assert len(self._all_paths) == path_i
+        print(f"t={time.time() - presolve_start:.2f}s: commodities processed")
 
         self._print("pre_solve done")
         return dict(edge_to_paths), path_i
 
     def _construct_lp(self, sat_flows=[]):
+        presolve_start = time.time()
         edge_to_paths, num_paths = self.pre_solve()
+        print(f"Pre Solve time: {time.time() - presolve_start:.2f}s")
         # return self._construct_path_lp(self._problem.G, edge_to_paths, num_paths, sat_flows)
         return self._construct_path_lp_matrix(self._problem.G, edge_to_paths, num_paths, sat_flows)
 

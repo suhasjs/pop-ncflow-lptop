@@ -189,8 +189,18 @@ class Problem(object):
     @property
     def traffic_matrix(self):
         return self._traffic_matrix
+    
+    def update_traffic_matrix(self, scale_factor, type, **kwargs):
+        """Update the underlying traffic matrix with input args"""
+        if self._traffic_matrix is not None:
+            self._traffic_matrix._update(scale_factor=scale_factor, type=type, **kwargs)
+            self._invalidate_commodity_lists()
+        else:
+            raise ValueError("Traffic matrix is not set.")
+
 
     def _invalidate_commodity_lists(self):
+        print(f"Invalidating commodity lists..")
         if hasattr(self, "_commodity_list"):
             del self._commodity_list
         if hasattr(self, "_multi_commodity_list"):
@@ -230,6 +240,7 @@ class Problem(object):
     @property
     def commodity_list(self):
         if not hasattr(self, "_commodity_list"):
+            print(f"Generating commodity list ...")
             self._commodity_list = list(
                 enumerate(commodity_gen(self.traffic_matrix.tm))
             )
@@ -293,7 +304,7 @@ class Problem(object):
     def total_capacity(self):
         return sum(cap for _, _, cap in self.G.edges.data("capacity"))
 
-        ##########################
+    ##########################
 
     # Private helper methods #
     ##########################

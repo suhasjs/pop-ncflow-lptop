@@ -5,17 +5,17 @@ from collections import defaultdict
 
 import numpy as np
 from gurobipy import GRB, Model, quicksum
+import gurobipy as gp
 
 from ..config import TOPOLOGIES_DIR
 from ..constants import NUM_CORES
 from ..graph_utils import path_to_edge_list
 from ..lp_solver import LpSolver
 from ..path_utils import find_paths, graph_copy_with_edge_weights, remove_cycles
+from ..utils import setup_gurobi_wls_env
 from .abstract_formulation import AbstractFormulation, Objective
 
 PATHS_DIR = os.path.join(TOPOLOGIES_DIR, "paths", "path-form")
-
-
 class PathFormulation(AbstractFormulation):
     @classmethod
     def new_total_flow(
@@ -111,7 +111,7 @@ class PathFormulation(AbstractFormulation):
     # flow caps = [((k1, ..., kn), f1), ...]
     def _construct_path_lp(self, G, edge_to_paths, num_total_paths, sat_flows=[]):
         self._print("Constructing Path LP")
-        m = Model("max-flow: path formulation")
+        m = Model("max-flow: path formulation", env=setup_gurobi_wls_env())
 
         # Create variables: one for each path
         path_vars = m.addVars(num_total_paths, vtype=GRB.CONTINUOUS, lb=0.0, name="f")
@@ -251,7 +251,7 @@ class PathFormulation(AbstractFormulation):
     def solve(self, problem, num_threads=NUM_CORES, state={}):
         self._problem = problem
         self._solver = self._construct_lp([])
-        return self._solver.solve_lp(num_threads=num_threads), state
+        return self._solver.solve_lp(num_threads=num_threads, err_tol=1e-2), state
 
     def pre_solve(self, problem=None):
         if problem is None:
