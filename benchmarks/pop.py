@@ -3,6 +3,7 @@
 import traceback
 import pickle
 import os
+import time
 from itertools import product
 from benchmark_helpers import get_args_and_problems, print_, PATH_FORM_HYPERPARAMS
 
@@ -140,7 +141,21 @@ def benchmark(problems, output_csv, args):
                             out=log,
                             **addl_kwargs
                         )
-                        pop.solve(problem)
+                        start_t = time.time()
+                        solve_stats, obj_val, _ = pop.solve(problem)
+                        st_runtime = time.time() - start_t
+                        est_runtime = pop.runtime_est(NUM_CORES)
+                        final_stats = {
+                            "subproblem_stats": solve_stats,
+                            "est_runtime" : est_runtime, 
+                            "num_subproblems" : num_subproblems, 
+                            "split_method" : split_method, 
+                            "split_fraction" : split_fraction, 
+                            "num_cores" : NUM_CORES,
+                            "objective" : obj_val,
+                            "single_threaded_runtime" : st_runtime,
+                        }
+                        print(f"Problem solve stats: {final_stats}, objective: {obj_val}")
                         sol_dict = pop.sol_dict
                         with open(log.name.replace(".txt", "-sol-dict.pkl"), "wb") as w:
                             pickle.dump(sol_dict, w)

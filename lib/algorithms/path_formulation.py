@@ -2,6 +2,7 @@ import os
 import pickle
 import re
 from collections import defaultdict
+import time
 
 import numpy as np
 from gurobipy import GRB, Model, quicksum
@@ -247,11 +248,24 @@ class PathFormulation(AbstractFormulation):
     ###############################
     # Override superclass methods #
     ###############################
-
     def solve(self, problem, num_threads=NUM_CORES, state={}):
         self._problem = problem
+        st_time = time.time()
         self._solver = self._construct_lp([])
-        return self._solver.solve_lp(num_threads=num_threads, err_tol=1e-2), state
+        setup_time = time.time() - st_time
+        obj_val = self._solver.solve_lp(num_threads=num_threads, err_tol=1e-2)
+        solve_time = (time.time() - st_time) - setup_time
+        solve_stats = {
+            "setup_time": setup_time,
+            "solve_time": solve_time,
+            "num_commodities": len(self.commodity_list),
+            "num_paths": len(self._all_paths),
+            "num_edges": len(problem.G.edges),
+            "num_nodes": len(problem.G.nodes),
+            "num_threads": num_threads,
+            "objective": obj_val,
+        }
+        return solve_stats, obj_val, state
 
     def pre_solve(self, problem=None):
         if problem is None:

@@ -165,7 +165,7 @@ class POP(PathFormulation):
     # Override superclass methods #
     ###############################
 
-    def solve(self, problem):
+    def solve(self, problem, state={}):
         self._problem = problem
         # List of subproblems that have not been solved yet. Each time, we solve a subproblem,
         # we'll remove an index from it
@@ -191,6 +191,7 @@ class POP(PathFormulation):
         leftover_capacities = defaultdict(float)
 
         self.iter = 0
+        all_solve_stats = []
         while len(unsolved_subproblem_indices) > 0:
             self._print("WHILE LOOP, ITER {}".format(self.iter))
             num_subproblems_in_iter = len(unsolved_subproblem_indices)
@@ -203,11 +204,19 @@ class POP(PathFormulation):
                 )
                 algo = self._algos[i]
                 algo._paths_dict = self._paths_dict
-                obj_val = algo.solve(
-                    subproblem,
-                    # Force Gurobi to use a single thread
-                    num_threads=max(NUM_CORES // num_subproblems_in_iter, 1),
-                )
+                if isinstance(self._algos[0], PathFormulation):
+                    solve_stats, obj_val, _ = algo.solve(
+                        subproblem,
+                        # Force Gurobi to use a single thread
+                        num_threads=max(NUM_CORES // num_subproblems_in_iter, 1),
+                    )
+                    all_solve_stats.append(solve_stats)
+                else:
+                    obj_val = algo.solve(
+                        subproblem,
+                        # Force Gurobi to use a single thread
+                        num_threads=max(NUM_CORES // num_subproblems_in_iter, 1),
+                    )
                 if obj_val is not None:
                     # If the subproblem was solved, then we'll replace the None in the list with
                     # the solved subproblem
@@ -243,6 +252,13 @@ class POP(PathFormulation):
 
         assert len(unsolved_subproblem_indices) == 0
         assert len([p for p in self._subproblem_list if p is None]) == 0
+        if len(all_solve_stats) > 0:
+            final_obj_val = sum(
+                [solve_stats["objective"] for solve_stats in all_solve_stats]
+            )
+        else:
+            final_obj_val = 0
+        return all_solve_stats, final_obj_val, state
 
     @property
     def sol_dict(self):

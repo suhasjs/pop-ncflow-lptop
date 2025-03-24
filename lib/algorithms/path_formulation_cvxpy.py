@@ -366,16 +366,32 @@ class PathFormulationCVXPY(AbstractFormulation):
         self.state = state
         self._problem = problem
         start_t = time.time()
-        self._solver = self._construct_lp([], )
+        construct_stats, self._solver = self._construct_lp([], )
         self._setup_time = time.time() - start_t
-        ret = self._solver.solve_lp()
+        obj_val = self._solver.solve_lp()
         self._solve_time = time.time() - start_t - self._setup_time
         print(f"Solver times -- setup: {self._setup_time:.2f}s, solve: {self._solve_time:.2f}s")
         self._runtime = self._solve_time + self._setup_time
         self._obj_val = self.cvxpy_problem.value
         self.state['x0'] = self._solver.path_vars.value.copy()
+        solve_stats = {
+            "setup_time": self._setup_time,
+            "solve_time": self._solve_time,
+            "num_commodities": len(self.commodity_list),
+            "num_paths": len(self._all_paths),
+            "num_edges": len(problem.G.edges),
+            "num_nodes": len(problem.G.nodes),
+            "num_threads": num_threads,
+            "objective": obj_val,
+        }
+        if self._solver.problem.solver_stats is not None and self._solver.problem.solver_stats.solve_time is not None:
+            cvxpy_time = self._solve_time - self._solver.problem.solver_stats.solve_time
+            actual_solver_time = self._solver.problem.solver_stats.solve_time
+            solve_stats["compilation_time"] = cvxpy_time
+            solve_stats["real_solver_time"] = actual_solver_time
+        solve_stats.update(construct_stats)
         print(f"Total solver time: {self.runtime:.2f}s, objective: {self.obj_val:.2f}")
-        return ret, state
+        return solve_stats, obj_val, state
 
     def pre_solve(self, problem=None):
         presolve_start = time.time()
@@ -388,39 +404,53 @@ class PathFormulationCVXPY(AbstractFormulation):
             else problem.commodity_list
         )
         print(f"t={time.time() - presolve_start:.2f}s: commodity_list extracted, size={len(self.commodity_list)}")
-        self.commodities = []
-        edge_to_paths = defaultdict(list)
-        self._path_to_commod = {}
-        self._all_paths = []
+        if not hasattr(self, "commodities"):
+            self.commodities = []
+            self._edge_to_paths = defaultdict(list)
+            self._path_to_commod = {}
+            self._all_paths = []
 
-        paths_dict = self.get_paths(problem)
-        print(f"t={time.time() - presolve_start:.2f}s: paths_dict extracted, size={len(paths_dict)}")
-        path_i = 0
-        for k, (s_k, t_k, d_k) in self.commodity_list:
-            # print(f"k: {k}, s_k: {s_k}, t_k: {t_k}, d_k: {d_k}")
-            paths = paths_dict[(s_k, t_k)]
-            path_ids = []
-            for path in paths:
-                self._all_paths.append(path)
-                for edge in path_to_edge_list(path):
-                    edge_to_paths[edge].append(path_i)
-                path_ids.append(path_i)
-                self._path_to_commod[path_i] = k
-                path_i += 1
-            self.commodities.append((k, d_k, path_ids))
+            paths_dict = self.get_paths(problem)
+            print(f"t={time.time() - presolve_start:.2f}s: paths_dict extracted, size={len(paths_dict)}")
+            path_i = 0
+            for k, (s_k, t_k, d_k) in self.commodity_list:
+                # print(f"k: {k}, s_k: {s_k}, t_k: {t_k}, d_k: {d_k}")
+                paths = paths_dict[(s_k, t_k)]
+                path_ids = []
+                for path in paths:
+                    self._all_paths.append(path)
+                    for edge in path_to_edge_list(path):
+                        self._edge_to_paths[edge].append(path_i)
+                    path_ids.append(path_i)
+                    self._path_to_commod[path_i] = k
+                    path_i += 1
+                self.commodities.append((k, d_k, path_ids))
+        else:
+            # update commodities with new demands
+            for i, x in enumerate(self.commodity_list):
+                k, (s_k, t_k, d_k_new) = x
+                k_old, d_k_old, path_ids = self.commodities[i]
+                assert k == k_old, "Commodity ID mismatch"
+                self.commodities[i] = (k, d_k_new, path_ids)
+            path_i = max(self._path_to_commod.keys()) + 1
         if self.DEBUG:
             assert len(self._all_paths) == path_i
         print(f"t={time.time() - presolve_start:.2f}s: commodities processed")
 
         self._print("pre_solve done")
-        return dict(edge_to_paths), path_i
+        return dict(self._edge_to_paths), path_i
 
     def _construct_lp(self, sat_flows=[]):
+        stats = {}
         presolve_start = time.time()
         edge_to_paths, num_paths = self.pre_solve()
-        print(f"Pre Solve time: {time.time() - presolve_start:.2f}s")
+        stats['presolve_time'] = time.time() - presolve_start
+        print(f"Pre Solve time: {stats['presolve_time']:.2f}s")
         # return self._construct_path_lp(self._problem.G, edge_to_paths, num_paths, sat_flows)
-        return self._construct_path_lp_matrix(self._problem.G, edge_to_paths, num_paths, sat_flows)
+        ret = self._construct_path_lp_matrix(self._problem.G, edge_to_paths, num_paths, sat_flows)
+        stats['construct_time'] = time.time() - presolve_start - stats['presolve_time']
+        print(f"Construct time: {stats['construct_time']:.2f}s")
+        return stats, ret
 
     @property
     def sol_dict(self):

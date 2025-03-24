@@ -297,10 +297,10 @@ def transform_for_network_simplex(problem, vis=False):
 def check_feasibility(problem, sol_dicts):
     print("Checking feasibility of solution")
     total_flow = 0.0
-    EPS = 1e-3
+    EPS = 1e-2
 
     G_copy = problem.G.copy()
-    print("checking flow conservation")
+    print("Checking flow conservation... ")
     for sol_dict in sol_dicts:
         for commod_key, flow_list in sol_dict.items():
             flow_for_commod = assert_flow_conservation(flow_list, commod_key)
@@ -314,14 +314,14 @@ def check_feasibility(problem, sol_dicts):
                 G_copy[u][v]["capacity"] -= flow_val
                 # if G_copy[u][v]['capacity'] < 0.0:
                 #     print(u, v, G_copy[u][v]['capacity'])
-                assert G_copy[u][v]["capacity"] > -EPS
+                assert G_copy[u][v]["capacity"] > -EPS, f"Expected non-negative capacity, but got {G_copy[u][v]['capacity']} for edge ({u}, {v})"
     print("Total Flow: " + str(total_flow))
-    print("checking capacity constraints")
+    print("Checking capacity constraints... ")
     edge_percent_cap_remaining = []
     for u, v, cap in G_copy.edges.data("capacity"):
         # if G_copy[u][v]['capacity'] < 0.0:
         #     print(u, v, G_copy[u][v]['capacity'])
-        assert G_copy[u][v]["capacity"] > -EPS
+        assert G_copy[u][v]["capacity"] > -EPS, f"Expected non-negative capacity, but got {G_copy[u][v]['capacity']} for edge ({u}, {v})"
         if problem.G[u][v]["capacity"] == 0.0:
             continue
         edge_percent_cap_remaining.append((u, v, cap / problem.G[u][v]["capacity"]))

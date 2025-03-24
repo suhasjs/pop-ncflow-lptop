@@ -13,8 +13,9 @@ sys.path.append("..")
 
 from lib.algorithms import PathFormulation, Objective, PathFormulationCVXPY, PathFormulationALCD
 from lib.problem import Problem
+from lib.graph_utils import check_feasibility
 
-PATH_FORMULATION_BACKEND=PathFormulationCVXPY
+PATH_FORMULATION_BACKEND=PathFormulationALCD
 
 TOP_DIR = "path-form-logs"
 HEADERS = [
@@ -90,9 +91,11 @@ def benchmark(problems, output_csv, obj):
                         VERBOSE=True,
                     )
                     start_t = time.time()
-                    ret, state = pf.solve(problem, state=state)
-                    print(f"End-to-end solve took: {time.time() - start_t:.2f} seconds")
+                    stats, obj_val, state = pf.solve(problem, state=state)
+                    print(f"End-to-end solve took: {time.time() - start_t:.2f} seconds: final objective = {obj_val}")
+                    print(f"Solver stats: {stats}")
                     pf_sol_dict = pf.sol_dict
+                    check_feasibility(problem, [pf_sol_dict])
                     with open(
                         os.path.join(
                             run_dir,

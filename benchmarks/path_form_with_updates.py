@@ -66,7 +66,7 @@ if args.load_tms is not None:
   print(f"Loading traffic matrices from {args.load_tms}...")
   TRAFFIC_MATRICES = pickle.load(open(args.load_tms, "rb"))
   print(f"Loaded {len(TRAFFIC_MATRICES)} traffic matrices")
-  num_rounds = len(TRAFFIC_MATRICES)
+  num_rounds = min(len(TRAFFIC_MATRICES), num_rounds)
 else:
   TRAFFIC_MATRICES = []
   print(f"Loading initial traffic matrix from {tm_fname}...")
@@ -103,7 +103,8 @@ for i in range(num_rounds):
   print(f"Solving problem with traffic matrix {i+1}/{num_rounds}...")
   print(f"# commodities: {len(problem.commodity_list)}")
   print(f"Total demand: {problem.total_demand}")
-  ret, state = pf.solve(problem, state=state)
+  solver_stats, obj_val, state = pf.solve(problem, state=state)
+  print(f"Solver stats: {solver_stats}, Objective value: {obj_val}")
   # update the problem with the next traffic matrix
   if i == num_rounds - 1:
     break

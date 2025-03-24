@@ -90,18 +90,20 @@ class PathFormulationALCD(PathFormulationCVXPY):
       Amat = lps.Matrix(mi + me)
       for i, (col, data) in enumerate(zip(mat_cols, mat_data)):
         Amat.setrow(i, list(zip(col, data)))
-      self.state['Amat'] = Amat
     else:
       print(f"Re-using Amat from previous run...")
       Amat = self.state['Amat']
     bvec = np.asarray(rhs_vec)
     
     # Create primal and dual problems
+    self.state['Amat'] = Amat
     self.primalA = Amat
     self.primalA_shape = (mi + me, nb + nf)
     self.primalb = bvec
     self.primalc = stdform_c
-    self.dualAt = Amat.transpose()
+    self.dualAt = Amat.transpose() if 'Atmat' not in self.state else self.state['Atmat']
+    self.state['Atmat'] = self.dualAt
+    # self.dualAt = Amat.transpose()
     self.dualA_shape = (nb + nf, mi + me)
     self.dualb = stdform_c
     self.dualc = bvec
@@ -115,15 +117,26 @@ class PathFormulationALCD(PathFormulationCVXPY):
     self.state = state
     self._problem = problem
     start_t = time.time()
-    self._construct_lp([], )
+    construct_stats, ret = self._construct_lp([], )
     self._setup_time = time.time() - start_t
-    ret = self.solve_lp()
+    obj_val = self.solve_lp()
     self._solve_time = time.time() - start_t - self._setup_time
     print(f"Solver times -- setup: {self._setup_time:.2f}s, solve: {self._solve_time:.2f}s")
     # TODO (suhasjs): adapt this for ALCD
     self._runtime = self._solve_time + self._setup_time
+    solve_stats = {
+            "setup_time": self._setup_time,
+            "solve_time": self._solve_time,
+            "num_commodities": len(self.commodity_list),
+            "num_paths": len(self._all_paths),
+            "num_edges": len(problem.G.edges),
+            "num_nodes": len(problem.G.nodes),
+            "num_threads": num_threads,
+            "objective": self._obj_val,
+    }
+    solve_stats.update(construct_stats)
     print(f"Total solver time: {self.runtime:.2f}s, objective: {self.obj_val:.2f}")
-    return ret, self.state
+    return solve_stats, obj_val, self.state
   
   def get_primal_alcd_format(self):
     return (self.primalA, self.primalb, self.primalc, self.nb, self.nf, self.m, self.me)
@@ -151,9 +164,9 @@ class PathFormulationALCD(PathFormulationCVXPY):
     lpcfg.max_iter = 1000
     lpcfg.inner_max_iter = 5
     lpcfg.primal_max_iter = 10
-    lpcfg.primal_inner_max_iter = 10
+    lpcfg.primal_inner_max_iter = 5
     lpcfg.pinf_dinf_ratio = 5
-    lpcfg.dual_max_iter = 50
+    lpcfg.dual_max_iter = 20
     lpcfg.dual_inner_max_iter = 3
     lpcfg.corrector_max_iter = 1
     lpcfg.penalty_alpha = 0
@@ -208,7 +221,7 @@ class PathFormulationALCD(PathFormulationCVXPY):
     # save to state for next run
     self.state['x0'] = x0.copy()
     self.state['w0'] = w0.copy()
-    return self
+    return self._obj_val
 
   @property
   def sol_dict(self):

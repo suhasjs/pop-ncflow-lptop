@@ -3,7 +3,7 @@ import cvxpy as cp
 from enum import Enum, unique
 import sys
 import numpy as np
-import ortools.pdlp.solvers_pb2 as pdlp_pb
+# import ortools.pdlp.solvers_pb2 as pdlp_pb
 from .utils import setup_gurobi_wls_env
 CVXPY_SOLVER = cp.GUROBI
 
@@ -47,9 +47,9 @@ class LpSolver(object):
     def solve_lp(
         self,
         method=Method.CONCURRENT,
-        num_threads=None,
-        bar_tol=None,
-        err_tol=None,
+        num_threads=8,
+        bar_tol=1e-2,
+        err_tol=1e-2,
         numeric_focus=False,
     ):
         model = self._model
@@ -136,14 +136,21 @@ class CvxpySolver:
             }
             self.problem.solve(solver=cp.PDLP, **solver_opts)
         elif CVXPY_SOLVER == cp.GUROBI:
-            self.problem.solve(solver=CVXPY_SOLVER, verbose=self.VERBOSE, warm_start=self.path_vars.value is not None, env=setup_gurobi_wls_env())
+            solver_params = {
+                "Method" : 3,
+                "OptimalityTol" : 1e-2,
+                "FeasibilityTol" : 1e-2,
+                "BarConvTol" : 1e-2,
+                "QCPDual" : False
+            }
+            self.problem.solve(solver=CVXPY_SOLVER, verbose=self.VERBOSE, warm_start=self.path_vars.value is not None, env=setup_gurobi_wls_env(), **solver_params)
         else:
             self.problem.solve(solver=CVXPY_SOLVER, verbose=self.VERBOSE)
         print(f"CVXPY problem solved with status: {self.problem.status}")
         print(f"Solver stats: {self.problem.solver_stats}")
         # print histogram of path vars.value
         print(f"Path vars hist: {list(zip(*np.histogram(self.path_vars.value, bins=20)))}")
-        return self
+        return self.problem.value
     
     @property
     def model(self):
