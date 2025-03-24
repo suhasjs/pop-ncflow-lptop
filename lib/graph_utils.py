@@ -52,7 +52,7 @@ def compute_residual_problem(problem, sol_dict):
     tm = problem.traffic_matrix.tm
     for (k, (s_k, t_k, d_k)), flow_list in sol_dict.items():
         out_flow = compute_in_or_out_flow(flow_list, 0, {s_k})
-        assert out_flow >= -EPS
+        assert out_flow >= -EPS, f"Expected non-negative outflow, but got {out_flow} for commodity {k}"
         if out_flow < 0:
             out_flow = 0
         new_d_k = d_k - out_flow
@@ -294,37 +294,56 @@ def transform_for_network_simplex(problem, vis=False):
 #
 # Also computes objective value for MAX
 # FLOW, and prints out the bottleneck edges yielded by the solution
-def check_feasibility(problem, sol_dicts):
+# if no_assert is True, function will not throw asserts, but record violations
+def check_feasibility(problem, sol_dicts, no_assert=False):
+    violations = [dict() for _ in range(len(sol_dicts))]
     print("Checking feasibility of solution")
     total_flow = 0.0
     EPS = 1e-2
 
     G_copy = problem.G.copy()
     print("Checking flow conservation... ")
-    for sol_dict in sol_dicts:
+    for i, sol_dict in enumerate(sol_dicts):
+        flow_viols = []
+        capacity_viols = []
         for commod_key, flow_list in sol_dict.items():
             flow_for_commod = assert_flow_conservation(flow_list, commod_key)
-            # assert demand constraints
-            try:
-                assert flow_for_commod <= commod_key[-1][-1] + EPS
-            except:
-                print("Flow for commodity {} is {}".format(commod_key, flow_for_commod))
+            # record violation
+            if flow_for_commod > commod_key[-1][-1] + EPS:
+                flow_viols.append({
+                    "commod": commod_key,
+                    "val": flow_for_commod,
+                    "ub": commod_key[-1][-1] + EPS,
+                })
+                print(f"Flow violation: {commod_key} ==> allocated {flow_for_commod:.2f} > {commod_key[-1][-1] + EPS:.2f}")
             total_flow += flow_for_commod
             for (u, v), flow_val in flow_list:
                 G_copy[u][v]["capacity"] -= flow_val
                 # if G_copy[u][v]['capacity'] < 0.0:
                 #     print(u, v, G_copy[u][v]['capacity'])
-                assert G_copy[u][v]["capacity"] > -EPS, f"Expected non-negative capacity, but got {G_copy[u][v]['capacity']} for edge ({u}, {v})"
+                if G_copy[u][v]["capacity"] <= -EPS:
+                    capacity_viols.append({
+                        "edge": (u, v),
+                        "val": G_copy[u][v]["capacity"],
+                        "ub": 0.0,
+                    })
+                    print(f"Capacity violation: {u} -> {v} ==> {G_copy[u][v]['capacity']:.2f}")
+                if not no_assert:
+                    assert G_copy[u][v]["capacity"] > -EPS, f"Expected non-negative capacity, but got {G_copy[u][v]['capacity']} for edge ({u}, {v})"
+        violations[i]["flow"] = flow_viols
+        violations[i]["capacity"] = capacity_viols
     print("Total Flow: " + str(total_flow))
     print("Checking capacity constraints... ")
     edge_percent_cap_remaining = []
     for u, v, cap in G_copy.edges.data("capacity"):
         # if G_copy[u][v]['capacity'] < 0.0:
         #     print(u, v, G_copy[u][v]['capacity'])
-        assert G_copy[u][v]["capacity"] > -EPS, f"Expected non-negative capacity, but got {G_copy[u][v]['capacity']} for edge ({u}, {v})"
+        if not no_assert:
+            assert G_copy[u][v]["capacity"] > -EPS, f"Expected non-negative capacity, but got {G_copy[u][v]['capacity']} for edge ({u}, {v})"
         if problem.G[u][v]["capacity"] == 0.0:
             continue
         edge_percent_cap_remaining.append((u, v, cap / problem.G[u][v]["capacity"]))
 
     bottleneck_edges = sorted(edge_percent_cap_remaining, key=lambda x: x[-1])
     print("Top 5 Bottleneck edges", bottleneck_edges[:5])
+    return violations if len(violations) > 1 else violations[0]

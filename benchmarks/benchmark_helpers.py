@@ -88,7 +88,6 @@ def get_problem(args):
     ][args.slice]
     return [(args.topo, topo_fname, tm_fname)]
 
-
 # This should be called when `many_problems` is True
 def get_problems(args):
     problems = []

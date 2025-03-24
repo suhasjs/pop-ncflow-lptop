@@ -133,6 +133,7 @@ class PathFormulationALCD(PathFormulationCVXPY):
             "num_nodes": len(problem.G.nodes),
             "num_threads": num_threads,
             "objective": self._obj_val,
+            "alcd_stats" : self._alcd_stats,
     }
     solve_stats.update(construct_stats)
     print(f"Total solver time: {self.runtime:.2f}s, objective: {self.obj_val:.2f}")
@@ -168,7 +169,7 @@ class PathFormulationALCD(PathFormulationCVXPY):
     lpcfg.pinf_dinf_ratio = 5
     lpcfg.dual_max_iter = 20
     lpcfg.dual_inner_max_iter = 3
-    lpcfg.corrector_max_iter = 1
+    lpcfg.corrector_max_iter = 5
     lpcfg.penalty_alpha = 0
 
     # Initialize ALCD solver
@@ -210,7 +211,8 @@ class PathFormulationALCD(PathFormulationCVXPY):
     # lps.solve_alcd(A, b, c, x0, w0, h2jj, hjj_ubound, nb, nf, m, me, lpcfg, lpinfo)
     lps.solve_alcd_corrector(A, b, c, x0, w0, h2jj, hjj_ubound, nb, nf, m, me, lpcfg, lpinfo)
     solve_end_time = time.time()
-    print(f"ALCD solver stats: {lps.lpinfo_to_dict(lpinfo)}")
+    self._alcd_stats = lps.lpinfo_to_dict(lpinfo)
+    print(f"ALCD solver stats: {self._alcd_stats}")
     print(f"ALCD Solver: Init: {(init_end_time - init_start_time)*1000:.1f}ms, Solve time: {(solve_end_time - solve_start_time)*1000:.1f}ms")
     print(f"ALCD solver finished in {solve_end_time - init_start_time:.2f}s")
 
