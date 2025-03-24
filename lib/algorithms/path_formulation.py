@@ -189,6 +189,14 @@ class PathFormulation(AbstractFormulation):
 
         if self.DEBUG:
             m.write("pf_debug.lp")
+        
+        # add start values if exist in state['x0'] for total_flow objective
+        if self._objective == Objective.TOTAL_FLOW and "x0" in self.state:
+            print(f"Warm-starting flow values from previous iteration...")
+            x0 = self.state["x0"]
+            for i, var in enumerate(path_vars.values()):
+                var.start = x0[i]
+            m.update()
         return LpSolver(m, None, self.DEBUG, self.VERBOSE, self.out)
 
     @staticmethod
@@ -249,6 +257,7 @@ class PathFormulation(AbstractFormulation):
     # Override superclass methods #
     ###############################
     def solve(self, problem, num_threads=NUM_CORES, state={}):
+        self.state = state
         self._problem = problem
         st_time = time.time()
         self._solver = self._construct_lp([])
@@ -265,6 +274,15 @@ class PathFormulation(AbstractFormulation):
             "num_threads": num_threads,
             "objective": obj_val,
         }
+        # construct x vector from solution
+        x0 = np.zeros(len(self._all_paths), dtype=np.float32)
+        for i, var in enumerate(self._solver.model.getVars()):
+            if var.varName.startswith("f[") and var.x != 0.0:
+                x0[i] = var.x
+        if self._objective == Objective.TOTAL_FLOW:
+            total_flow = x0.sum()
+            print(f"Total flow: {total_flow:.2f}")
+        state["x0"] = x0
         return solve_stats, obj_val, state
 
     def pre_solve(self, problem=None):

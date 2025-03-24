@@ -3,7 +3,7 @@ from itertools import tee
 from sys import maxsize
 from collections import defaultdict
 
-EPS = 1e-4
+EPS = 1e-2
 
 
 def add_bi_edge(G, src, dest, capacity=None):
