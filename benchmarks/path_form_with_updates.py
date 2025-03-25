@@ -168,7 +168,7 @@ for i in range(num_rounds):
     solver_stats, obj_val, state = pf.solve(problem, state=state)
   elif args.solver == "POP":
     start_t = time.time()
-    solve_stats, obj_val, state = pf.solve(problem, state=state)
+    solve_stats, obj_val, state = pf.solve(problem, state={})
     st_runtime = time.time() - start_t
     est_runtime = pf.runtime_est(NUM_CORES)
     solver_stats = {
