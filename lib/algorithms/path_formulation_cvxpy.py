@@ -467,6 +467,12 @@ class PathFormulationCVXPY(AbstractFormulation):
             for commod_key in self.problem.commodity_list:
                 self._sol_dict[commod_key] = sol_dict_def.get(commod_key, [])
         return self._sol_dict
+    
+    @property
+    def sol_x(self):
+        if not hasattr(self, "_sol_x"):
+            self._sol_x = self._solver.path_vars.value
+        return self._sol_x
 
     # (suhasjs): WARNING -- this might not be accurate (not used anywhere, so not tested)
     @property

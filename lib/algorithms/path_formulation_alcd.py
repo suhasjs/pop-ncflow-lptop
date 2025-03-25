@@ -225,6 +225,14 @@ class PathFormulationALCD(PathFormulationCVXPY):
     self.state['w0'] = w0.copy()
     return self._obj_val
 
+  
+  @property
+  def sol_x(self):
+    if not hasattr(self, "_sol_x"):
+      self._sol_x = np.zeros(len(self._path_vars))
+      self._sol_x[:] = self._path_vars
+    return self._sol_x
+  
   @property
   def sol_dict(self):
     if not hasattr(self, "_sol_dict"):

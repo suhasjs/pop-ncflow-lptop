@@ -328,6 +328,14 @@ class PathFormulation(AbstractFormulation):
         )
 
     @property
+    def sol_x(self):
+        if not hasattr(self, "_sol_x"):
+            self._sol_x = np.zeros(len(self._all_paths), dtype=np.float32)
+            for i, var in enumerate(self.model.getVars()):
+                self._sol_x[i] = var.x
+        return self._sol_x
+    
+    @property
     def sol_dict(self):
         if not hasattr(self, "_sol_dict"):
             sol_dict_def = defaultdict(list)

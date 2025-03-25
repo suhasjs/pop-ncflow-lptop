@@ -1,5 +1,6 @@
 import os
 from collections import defaultdict
+import numpy as np
 
 from lib.graph_utils import compute_residual_problem
 
@@ -209,6 +210,7 @@ class POP(PathFormulation):
                         subproblem,
                         # Force Gurobi to use a single thread
                         num_threads=max(NUM_CORES // num_subproblems_in_iter, 1),
+                        state={}
                     )
                     all_solve_stats.append(solve_stats)
                 else:
@@ -274,6 +276,10 @@ class POP(PathFormulation):
             }
 
         return self._sol_dict
+    
+    @property
+    def sol_x(self):
+        return None
 
     @property
     def sol_mat(self):

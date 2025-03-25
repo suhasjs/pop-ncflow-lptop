@@ -89,7 +89,8 @@ num_rounds = args.num_rounds
 update_alpha = args.update_alpha
 
 results = {
-  "meta" : {"topo" : args.topo, "solver": args.solver}, "solver_stats" : [], "violations" : []
+  "meta" : {"topo" : args.topo, "solver": args.solver}, "solver_stats" : [], "violations" : [],
+  "x_opt" : []
 }
 
 # Load traffic matrices for repeatable results
@@ -188,6 +189,7 @@ for i in range(num_rounds):
   # save results to results dict
   results["solver_stats"].append(solver_stats)
   results["violations"].append(violations)
+  results["x_opt"].append(pf.sol_x.copy() if pf.sol_x is not None else None)
 
   # update the problem with the next traffic matrix
   if i == num_rounds - 1:
