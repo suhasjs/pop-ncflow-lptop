@@ -256,7 +256,7 @@ class PathFormulation(AbstractFormulation):
     ###############################
     # Override superclass methods #
     ###############################
-    def solve(self, problem, num_threads=NUM_CORES, state={}):
+    def solve(self, problem, num_threads=8, state={}):
         self.state = state
         self._problem = problem
         st_time = time.time()

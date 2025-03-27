@@ -209,7 +209,7 @@ class POP(PathFormulation):
                     solve_stats, obj_val, _ = algo.solve(
                         subproblem,
                         # Force Gurobi to use a single thread
-                        num_threads=max(NUM_CORES // num_subproblems_in_iter, 1), state={}
+                        num_threads=max(NUM_CORES // num_subproblems_in_iter, 8), state={}
                     )
                     all_solve_stats.append(solve_stats)
                 else:

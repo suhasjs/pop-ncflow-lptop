@@ -256,13 +256,26 @@ class TopFormulation(AbstractFormulation):
     ###############################
     # Override superclass methods #
     ###############################
-
-    def solve(self, problem, num_threads=NUM_CORES):
+    def solve(self, problem, num_threads=NUM_CORES, state={}):
+        self.state = {}
         self._problem = problem
         starttime = time.time()
         self._solver = self._construct_lp([])
         self.buildtime = time.time() - starttime
-        return self._solver.solve_lp(num_threads=num_threads)
+        obj_val = self._solver.solve_lp(err_tol=1e-2)
+        sol_dict = self.sol_dict
+        solve_time = (time.time() - starttime) - self.buildtime
+        solve_stats = {
+            "setup_time": self.buildtime,
+            "solve_time": solve_time,
+            "num_commodities": len(self.commodity_list),
+            "num_paths": len(self._all_paths),
+            "num_edges": len(problem.G.edges),
+            "num_nodes": len(problem.G.nodes),
+            "num_threads": num_threads,
+            "objective": self._total_objVal,
+        }
+        return solve_stats, obj_val, state
 
     def pre_solve(self, problem=None):
         if problem is None:
@@ -279,14 +292,17 @@ class TopFormulation(AbstractFormulation):
         self._all_paths = []
 
         # only solve top % demands with lp
-        self.top_d_threshold = np.quantile(
-            [d_k for k, (s_k, t_k, d_k)
-            in self.commodity_list if d_k > 0.001], 1-self._top_percentage)
-
+        demands = [(k, d_k) for k, (_, _, d_k) in self.commodity_list]
+        sorted_demands = sorted(demands, key=lambda x: x[1], reverse=True)
+        max_num_chosen = int(self._top_percentage * len(self.commodity_list))
+        self._top_commodities = set([k for k, _ in sorted_demands[:max_num_chosen]])
+        self.top_d_threshold = sorted_demands[max_num_chosen - 1][1]
         paths_dict = self.get_paths(problem)
         path_i = 0
+        skipped_i = 0
         for k, (s_k, t_k, d_k) in self.commodity_list:
-            if d_k < self.top_d_threshold:
+            if k not in self._top_commodities:
+                skipped_i += 1
                 continue
             paths = paths_dict[(s_k, t_k)]
             path_ids = []
@@ -301,6 +317,7 @@ class TopFormulation(AbstractFormulation):
                 path_i += 1
 
             self.commodities.append((k, d_k, path_ids))
+        print(f"Top demand threshold: {self.top_d_threshold}, skipped={skipped_i}, kept={len(self.commodities)} commodities")
         if self.DEBUG:
             assert len(self._all_paths) == path_i
 
@@ -344,7 +361,7 @@ class TopFormulation(AbstractFormulation):
                     for ((u, v), flow_per_path_per_commod) in self._sol_dict[commod_key]:
                         capacity_dict[(u, v)] -= flow_per_path_per_commod
                 for k, (s_k, t_k, d_k) in self.commodity_list:
-                    if d_k >= self.top_d_threshold:
+                    if k in self._top_commodities:
                         continue
                     capacity = min([d_k] + [capacity_dict[(u, v)] for u, v
                         in zip(
@@ -397,8 +414,11 @@ class TopFormulation(AbstractFormulation):
                 k = self._path_to_commod[p]
                 for edge in path_to_edge_list(self._all_paths[p]):
                     sol_mat[edge_idx[edge], k] += var.x
-
         return sol_mat
+    
+    @property
+    def sol_x(self):
+        return None
 
     @classmethod
     # Return total number of fib entries and max for any node in topology

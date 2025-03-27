@@ -375,13 +375,13 @@ class PathFormulationCVXPY(AbstractFormulation):
         self._obj_val = self.cvxpy_problem.value
         self.state['x0'] = self._solver.path_vars.value.copy()
         solve_stats = {
-            "setup_time": self._setup_time,
+        "setup_time": self._setup_time,
             "solve_time": self._solve_time,
             "num_commodities": len(self.commodity_list),
             "num_paths": len(self._all_paths),
             "num_edges": len(problem.G.edges),
             "num_nodes": len(problem.G.nodes),
-            "num_threads": num_threads,
+            "num_threads": 8,
             "objective": obj_val,
         }
         if self._solver.problem.solver_stats is not None and self._solver.problem.solver_stats.solve_time is not None:

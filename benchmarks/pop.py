@@ -182,6 +182,7 @@ def benchmark(problems, output_csv, args):
                             pop.runtime_est(NUM_CORES),
                         )
                         print_(result_line, file=results)
+                        print(result_line)
 
                 except:
                     print_(

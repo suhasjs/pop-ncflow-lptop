@@ -113,13 +113,13 @@ class PathFormulationALCD(PathFormulationCVXPY):
     print(f"t={time.time() - start_t:.2f}s: Finished all constraints..")
     return self
   
-  def solve(self, problem, num_threads=8, state={}):
+  def solve(self, problem, num_threads=8, state={}, alcd_params={}):
     self.state = state
     self._problem = problem
     start_t = time.time()
     construct_stats, ret = self._construct_lp([], )
     self._setup_time = time.time() - start_t
-    obj_val = self.solve_lp()
+    obj_val = self.solve_lp(alcd_params=alcd_params)
     self._solve_time = time.time() - start_t - self._setup_time
     print(f"Solver times -- setup: {self._setup_time:.2f}s, solve: {self._solve_time:.2f}s")
     # TODO (suhasjs): adapt this for ALCD
@@ -146,30 +146,30 @@ class PathFormulationALCD(PathFormulationCVXPY):
     ## TODO (suhasjs) --> Check if nb, nf, m, me are correctly returned???
     return (self.dualAt, self.dualb, self.dualc, self.me, self.m, self.nb, self.nf)
 
-  def solve_lp(self):
-    state = self.state
+  def solve_lp(self, alcd_params):
+    state = self.state if alcd_params['warm_start'] else {}
     primal_args = self.get_primal_alcd_format()
     dual_lpargs = self.get_dual_alcd_format()
     
     # Create args for ALCD solver
     lpcfg = lps.LP_Param()
-    lpcfg.solve_from_dual = True
+    lpcfg.solve_from_dual = False
     # TODO (suhasjs) --> Why does reducing eta help us here??
     lpcfg.eta = 1
     lpcfg.verbose = True
-    lpcfg.tol_trans = 0.1
-    lpcfg.tol = 0.1
+    lpcfg.tol_trans = alcd_params.get('tol_trans', 0.1)
+    lpcfg.tol = alcd_params.get('tol', 0.1)
     # lpcfg.tol_sub = args.alcd_tol
-    lpcfg.tol_sub = 1e-1
+    lpcfg.tol_sub = 5e-2
     lpcfg.use_CG = True
-    lpcfg.max_iter = 1000
-    lpcfg.inner_max_iter = 5
-    lpcfg.primal_max_iter = 10
-    lpcfg.primal_inner_max_iter = 3
-    lpcfg.pinf_dinf_ratio = 50
-    lpcfg.dual_max_iter = 15
-    lpcfg.dual_inner_max_iter = 3
-    lpcfg.corrector_max_iter = 5
+    lpcfg.max_iter = 100
+    lpcfg.inner_max_iter = 3
+    lpcfg.primal_max_iter = alcd_params.get('primal_max_iter', 10)
+    lpcfg.primal_inner_max_iter = alcd_params.get('primal_inner_max_iter', 3)
+    lpcfg.pinf_dinf_ratio = alcd_params.get('pinf_dinf_ratio', 10)
+    lpcfg.dual_max_iter = alcd_params.get('dual_max_iter', 15)
+    lpcfg.dual_inner_max_iter = alcd_params.get('dual_inner_max_iter', 3)
+    lpcfg.corrector_max_iter = alcd_params.get('corrector_max_iter', 5)
     lpcfg.penalty_alpha = 0
 
     # Initialize ALCD solver
@@ -218,14 +218,13 @@ class PathFormulationALCD(PathFormulationCVXPY):
 
     # copy solution into _path_vars
     self._path_vars[:] = x0
-    self._obj_val = -1 * np.dot(c, x0)
+    self._obj_val = np.sum(x0)
 
     # save to state for next run
     self.state['x0'] = x0.copy()
     self.state['w0'] = w0.copy()
     return self._obj_val
 
-  
   @property
   def sol_x(self):
     if not hasattr(self, "_sol_x"):

@@ -90,7 +90,10 @@ class TrafficMatrix(object):
             raise Exception('"{}" not a valid file format'.format(fname))
 
         vals = os.path.basename(fname)[:-4].split("_")
-        model, seed, scale_factor = vals[1], int(vals[2]), float(vals[3])
+        if len(vals) == 4:
+            model, seed, scale_factor = vals[1], int(vals[2]), float(vals[3])
+        else:
+            model, seed, scale_factor = "toy", 0, 1
         vals = vals[4:]
 
         if model == "gravity":
@@ -467,7 +470,7 @@ class PoissonTrafficMatrix(TrafficMatrix):
         np.random.seed(self.seed)
         num_nodes = len(G.nodes)
 
-        distances = np.zeros((num_nodes, num_nodes), dtype=np.int)
+        distances = np.zeros((num_nodes, num_nodes), dtype=np.int32)
         dist_iter = nx.shortest_path_length(G)
         for src, dist_dict in dist_iter:
             for target, dist in dist_dict.items():

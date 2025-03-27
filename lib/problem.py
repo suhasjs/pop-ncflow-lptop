@@ -144,8 +144,13 @@ class Problem(object):
         elif topology_fname.endswith(".dot"):
             G = Problem._read_graph_dot(topology_fname, old_way=old_way)
             old_G = Problem._read_graph_dot(topology_fname, old_way=True)
-
-        tm = TrafficMatrix.from_file(traffic_matrix_fname)
+        if traffic_matrix_fname is not None:
+            tm = TrafficMatrix.from_file(traffic_matrix_fname)
+        else:
+            tm = np.ones((G.number_of_nodes(), G.number_of_nodes()), dtype=np.float64)
+            np.fill_diagonal(tm, 0)
+            tm = RealTrafficMatrix(problem=None, tm=tm, date=None,
+                                   time=0, seed=0, scale_factor=1,)
         problem = cls(G=G, traffic_matrix=tm, seed=0)
         if old_G is not None:
             problem.old_G = old_G
@@ -193,11 +198,10 @@ class Problem(object):
     def update_traffic_matrix(self, scale_factor, type, **kwargs):
         """Update the underlying traffic matrix with input args"""
         if self._traffic_matrix is not None:
-            self._traffic_matrix._update(scale_factor=scale_factor, type=type, **kwargs)
+            self._traffic_matrix._update(scale_factor, type, **kwargs)
             self._invalidate_commodity_lists()
         else:
             raise ValueError("Traffic matrix is not set.")
-
 
     def _invalidate_commodity_lists(self):
         print(f"Invalidating commodity lists..")
