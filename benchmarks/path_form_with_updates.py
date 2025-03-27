@@ -66,18 +66,21 @@ PROBLEMS_POISSON_HARD = {
 
 ALCD_PARAMS = {
   "UsCarrier" : {
-    "primal_max_iter" : 10,
+    "primal_max_iter" : 20,
     "primal_inner_max_iter" : 3,
     "dual_max_iter" : 5,
-    "dual_inner_max_iter" : 3,
+    "dual_inner_max_iter" : 2,
+    "pinf_dinf_ratio" : 50,
+    "corrector_max_iter" : 5,
+    "tol_trans" : 0.05,
     "tol" : 0.05
   },
   "Kdl" : {
     "primal_max_iter" : 20,
     "primal_inner_max_iter" : 3,
-    "dual_max_iter" : 10,
-    "dual_inner_max_iter" : 3,
-    "pinf_dinf_ratio" : 20,
+    "dual_max_iter" : 5,
+    "dual_inner_max_iter" : 2,
+    "pinf_dinf_ratio" : 50,
     "corrector_max_iter" : 5,
     "tol_trans" : 0.05,
     "tol" : 0.05
@@ -85,9 +88,9 @@ ALCD_PARAMS = {
   "ASN" : {
     "primal_max_iter" : 20,
     "primal_inner_max_iter" : 3,
-    "dual_max_iter" : 10,
-    "dual_inner_max_iter" : 3,
-    "pinf_dinf_ratio" : 20,
+    "dual_max_iter" : 5,
+    "dual_inner_max_iter" : 2,
+    "pinf_dinf_ratio" : 50,
     "corrector_max_iter" : 5,
     "tol" : 0.1,
     "tol_trans" : 0.1,
