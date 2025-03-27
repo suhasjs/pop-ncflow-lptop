@@ -43,7 +43,7 @@ class PathFormulationALCD(PathFormulationCVXPY):
     assert len(sat_flows) == 0, "Matrix formulation only supports empty satisfied flows list"
 
     # maximize total flow = minimize (negative total flow)
-    stdform_c = -1 * np.ones(num_total_paths)
+    stdform_c = -1 * np.ones(num_total_paths) / np.sqrt(SCALING_CONSTANT)
 
     mat_cols, mat_data = [], []
     rhs_vec = []

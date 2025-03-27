@@ -46,9 +46,9 @@ class LpSolver(object):
     # this function
     def solve_lp(
         self,
-        method=Method.CONCURRENT,
+        method=Method.BARRIER,
         num_threads=8,
-        bar_tol=1e-2,
+        bar_tol=None,
         err_tol=1e-2,
         numeric_focus=False,
     ):
@@ -58,6 +58,8 @@ class LpSolver(object):
         if num_threads:
             model.setParam("Threads", int(num_threads))
         model.setParam("Method", method.value)
+        # model.setParam("Presolve", 0)
+        # model.setParam("Crossover", 0)
         model.setParam("LogFile", self.gurobi_out)
         try:
             if bar_tol:
@@ -114,7 +116,7 @@ class CvxpySolver:
 
     def solve_lp(
         self,
-        method=Method.CONCURRENT,
+        method=Method.BARRIER,
         num_threads=None,
         bar_tol=None,
         err_tol=None,
@@ -137,11 +139,13 @@ class CvxpySolver:
             self.problem.solve(solver=cp.PDLP, **solver_opts)
         elif CVXPY_SOLVER == cp.GUROBI:
             solver_params = {
-                "Method" : 3,
+                "Method" : 2,
                 "OptimalityTol" : 1e-2,
                 "FeasibilityTol" : 1e-2,
                 "BarConvTol" : 1e-2,
-                "QCPDual" : False
+                "QCPDual" : False,
+                "Presolve" : 0,
+                "Threads" : 8,
             }
             self.problem.solve(solver=CVXPY_SOLVER, verbose=self.VERBOSE, warm_start=self.path_vars.value is not None, env=setup_gurobi_wls_env(), **solver_params)
         else:
