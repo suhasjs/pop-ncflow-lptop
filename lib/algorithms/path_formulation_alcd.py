@@ -219,6 +219,10 @@ class PathFormulationALCD(PathFormulationCVXPY):
     # copy solution into _path_vars
     self._path_vars[:] = x0
     self._obj_val = np.sum(x0)
+    self._sol_x = self._path_vars
+    path_length_x = 1 if 'x0' not in state else np.linalg.norm(x0 - state['x0'], ord=1) / x0.sum()
+    path_length_w = 1 if 'w0' not in state else np.linalg.norm(w0 - state['w0'], ord=1) / w0.sum()
+    print(f"Path lengths (rel) --> x0: {path_length_x:.2f}, w0: {path_length_w:.2f}")
 
     # save to state for next run
     self.state['x0'] = x0.copy()

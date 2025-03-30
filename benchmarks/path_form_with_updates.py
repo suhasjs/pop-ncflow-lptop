@@ -64,6 +64,17 @@ PROBLEMS_POISSON_HARD = {
   }
 }
 
+PROBLEMS_BIMODAL_HARD = {
+  "Kdl" : {
+    "topo_fname": "../../topologies/Kdl.json",
+    "tm_fname" : "../../traffic-matrices/bimodal/Kdl_0.2_(0.02:0.04)_(0.08:0.16)_16.pkl"
+  },
+  "ASN" : {
+    "topo_fname": "../../topologies/ASN2k.json",
+    "tm_fname": "../../traffic-matrices/bimodal/ASN_0.2_(0.02:0.04)_(0.08:0.16)_24.pkl"
+  }
+}
+
 ALCD_PARAMS = {
   "UsCarrier" : {
     "primal_max_iter" : 20,
@@ -76,24 +87,24 @@ ALCD_PARAMS = {
     "tol" : 0.05
   },
   "Kdl" : {
-    "primal_max_iter" : 20,
+    "primal_max_iter" : 10,
     "primal_inner_max_iter" : 3,
-    "dual_max_iter" : 5,
-    "dual_inner_max_iter" : 2,
-    "pinf_dinf_ratio" : 50,
-    "corrector_max_iter" : 5,
-    "tol_trans" : 0.05,
+    "dual_max_iter" : 10,
+    "dual_inner_max_iter" : 1,
+    "pinf_dinf_ratio" : 200,
+    "corrector_max_iter" : 2,
+    "tol_trans" : 0.01,
     "tol" : 0.05
   },
   "ASN" : {
-    "primal_max_iter" : 20,
+    "primal_max_iter" : 10,
     "primal_inner_max_iter" : 3,
-    "dual_max_iter" : 5,
-    "dual_inner_max_iter" : 2,
-    "pinf_dinf_ratio" : 50,
-    "corrector_max_iter" : 5,
+    "dual_max_iter" : 10,
+    "dual_inner_max_iter" : 1,
+    "pinf_dinf_ratio" : 200,
+    "corrector_max_iter" : 2,
+    "tol_trans" : 0.01,
     "tol" : 0.1,
-    "tol_trans" : 0.1,
   }
 }
 
@@ -106,7 +117,7 @@ argparser.add_argument(
 )
 argparser.add_argument(
     "--benchmark",
-    choices=["toy", "poisson_easy", "poisson_hard"],
+    choices=["toy", "poisson_easy", "poisson_hard", "bimodal_hard"],
     default="toy",
     help="benchmark to run (default: toy)"
 )
@@ -166,8 +177,11 @@ elif args.benchmark == "poisson_easy":
 elif args.benchmark == "poisson_hard":
   PROBLEMS = PROBLEMS_POISSON_HARD
   print("Running on poisson hard problems")
+elif args.benchmark == "bimodal_hard":
+  PROBLEMS = PROBLEMS_BIMODAL_HARD
+  print("Running on bimodal hard problems")
 else:
-  raise ValueError(f"Unknown benchmark {args.benchmark}. Must be one of toy, poisson_easy, poisson_hard")
+  raise ValueError(f"Unknown benchmark {args.benchmark}. Must be one of toy, poisson_easy, poisson_hard, bimodal_hard")
 topo_fname = PROBLEMS[args.topo]["topo_fname"]
 tm_fname = PROBLEMS[args.topo]["tm_fname"]
 num_rounds = args.num_rounds

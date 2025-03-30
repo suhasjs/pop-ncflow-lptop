@@ -257,6 +257,8 @@ class PathFormulation(AbstractFormulation):
     # Override superclass methods #
     ###############################
     def solve(self, problem, num_threads=8, state={}):
+        if hasattr(self, "_sol_x"):
+            del self._sol_x
         self.state = state
         self._problem = problem
         st_time = time.time()
