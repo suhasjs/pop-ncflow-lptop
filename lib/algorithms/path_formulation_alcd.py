@@ -114,6 +114,10 @@ class PathFormulationALCD(PathFormulationCVXPY):
     return self
   
   def solve(self, problem, num_threads=8, state={}, alcd_params={}):
+    if hasattr(self, "_sol_x"):
+      del self._sol_x
+    if hasattr(self, "_sol_dict"):
+      del self._sol_dict
     self.state = state
     self._problem = problem
     start_t = time.time()
@@ -240,7 +244,6 @@ class PathFormulationALCD(PathFormulationCVXPY):
   def sol_dict(self):
     if not hasattr(self, "_sol_dict"):
       sol_dict_def = defaultdict(list)
-      # Loop over indices of the cvxpy variable (named "f")
       for p, val in enumerate(self._path_vars):
         if abs(val) > 1e-6:
           commod = self.commodity_list[self._path_to_commod[p]]
